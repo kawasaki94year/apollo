@@ -12,6 +12,8 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
+
+ component by Alan-20250615
  *****************************************************************************/
 
 #ifndef CYBER_COMPONENT_COMPONENT_H_
@@ -36,8 +38,8 @@
 namespace apollo {
 namespace cyber {
 
-using apollo::cyber::common::GlobalData;
-using apollo::cyber::proto::RoleAttributes;
+using apollo::cyber::common::GlobalData; //alias for global data singleton
+using apollo::cyber::proto::RoleAttributes; // alias for role attributes
 
 /**
  * @brief .
@@ -59,8 +61,8 @@ template <typename M0 = NullType, typename M1 = NullType,
           typename M2 = NullType, typename M3 = NullType>
 class Component : public ComponentBase {
  public:
-  Component() {}
-  ~Component() override {}
+  Component() {}  // default constructor
+  ~Component() override {} // virtual destructor
 
   /**
    * @brief init the component by protobuf object.
@@ -69,7 +71,7 @@ class Component : public ComponentBase {
    *
    * @return returns true if successful, otherwise returns false
    */
-  bool Initialize(const ComponentConfig& config) override;
+  bool Initialize(const ComponentConfig& config) override; // initialize component
   bool Process(const std::shared_ptr<M0>& msg0, const std::shared_ptr<M1>& msg1,
                const std::shared_ptr<M2>& msg2,
                const std::shared_ptr<M3>& msg3);
