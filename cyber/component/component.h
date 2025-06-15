@@ -74,7 +74,7 @@ class Component : public ComponentBase {
   bool Initialize(const ComponentConfig& config) override; // initialize component
   bool Process(const std::shared_ptr<M0>& msg0, const std::shared_ptr<M1>& msg1,
                const std::shared_ptr<M2>& msg2,
-               const std::shared_ptr<M3>& msg3);
+               const std::shared_ptr<M3>& msg3);  // process incoming messages
 
  private:
   /**
@@ -90,11 +90,11 @@ class Component : public ComponentBase {
   virtual bool Proc(const std::shared_ptr<M0>& msg0,
                     const std::shared_ptr<M1>& msg1,
                     const std::shared_ptr<M2>& msg2,
-                    const std::shared_ptr<M3>& msg3) = 0;
+                    const std::shared_ptr<M3>& msg3) = 0; // user-defined logic
 };
 
 template <>
-class Component<NullType, NullType, NullType, NullType> : public ComponentBase {
+class Component<NullType, NullType, NullType, NullType> : public ComponentBase {  // specialization for no inputs
  public:
   Component() {}
   ~Component() override {}
@@ -102,12 +102,12 @@ class Component<NullType, NullType, NullType, NullType> : public ComponentBase {
 };
 
 template <typename M0>
-class Component<M0, NullType, NullType, NullType> : public ComponentBase {
+class Component<M0, NullType, NullType, NullType> : public ComponentBase {  // specialization with single input
  public:
   Component() {}
   ~Component() override {}
-  bool Initialize(const ComponentConfig& config) override;
-  bool Process(const std::shared_ptr<M0>& msg);
+  bool Initialize(const ComponentConfig& config) override;  // init for timer only
+  bool Process(const std::shared_ptr<M0>& msg); // process one message
 
  private:
   virtual bool Proc(const std::shared_ptr<M0>& msg) = 0;
