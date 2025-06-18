@@ -114,13 +114,13 @@ class Component<M0, NullType, NullType, NullType> : public ComponentBase {  // s
 };
 
 template <typename M0, typename M1>
-class Component<M0, M1, NullType, NullType> : public ComponentBase {
+class Component<M0, M1, NullType, NullType> : public ComponentBase { // specialization with two inputs
  public:
   Component() {}
   ~Component() override {}
   bool Initialize(const ComponentConfig& config) override;
   bool Process(const std::shared_ptr<M0>& msg0,
-               const std::shared_ptr<M1>& msg1);
+               const std::shared_ptr<M1>& msg1);// process two messages
 
  private:
   virtual bool Proc(const std::shared_ptr<M0>& msg,
@@ -128,13 +128,13 @@ class Component<M0, M1, NullType, NullType> : public ComponentBase {
 };
 
 template <typename M0, typename M1, typename M2>
-class Component<M0, M1, M2, NullType> : public ComponentBase {
+class Component<M0, M1, M2, NullType> : public ComponentBase { 
  public:
   Component() {}
   ~Component() override {}
   bool Initialize(const ComponentConfig& config) override;
   bool Process(const std::shared_ptr<M0>& msg0, const std::shared_ptr<M1>& msg1,
-               const std::shared_ptr<M2>& msg2);
+               const std::shared_ptr<M2>& msg2);  // process three messages
 
  private:
   virtual bool Proc(const std::shared_ptr<M0>& msg,
@@ -144,48 +144,48 @@ class Component<M0, M1, M2, NullType> : public ComponentBase {
 
 template <typename M0>
 bool Component<M0, NullType, NullType, NullType>::Process(
-    const std::shared_ptr<M0>& msg) {
-  if (is_shutdown_.load()) {
+    const std::shared_ptr<M0>& msg) { 
+  if (is_shutdown_.load()) { // skip when shutting down
     return true;
   }
-  return Proc(msg);
+  return Proc(msg); // call implementation
 }
 
 inline bool Component<NullType, NullType, NullType>::Initialize(
     const ComponentConfig& config) {
-  node_.reset(new Node(config.name()));
-  LoadConfigFiles(config);
+  node_.reset(new Node(config.name()));  // create node for component
+  LoadConfigFiles(config); // parse extra configs
   if (!Init()) {
-    AERROR << "Component Init() failed." << std::endl;
+    AERROR << "Component Init() failed." << std::endl; // initialization failed
     return false;
   }
-  return true;
+  return true; // success
 }
 
 template <typename M0>
 bool Component<M0, NullType, NullType, NullType>::Initialize(
     const ComponentConfig& config) {
   node_.reset(new Node(config.name()));
-  LoadConfigFiles(config);
+  LoadConfigFiles(config); // load conf and flags
 
-  if (config.readers_size() < 1) {
+  if (config.readers_size() < 1) { // require one reader
     AERROR << "Invalid config file: too few readers.";
     return false;
   }
 
-  if (!Init()) {
+  if (!Init()) { // call user initialization
     AERROR << "Component Init() failed.";
     return false;
   }
 
-  bool is_reality_mode = GlobalData::Instance()->IsRealityMode();
+  bool is_reality_mode = GlobalData::Instance()->IsRealityMode(); // check runtime mode
 
-  ReaderConfig reader_cfg;
-  reader_cfg.channel_name = config.readers(0).channel();
-  reader_cfg.qos_profile.CopyFrom(config.readers(0).qos_profile());
-  reader_cfg.pending_queue_size = config.readers(0).pending_queue_size();
+  ReaderConfig reader_cfg;  // reader options
+  reader_cfg.channel_name = config.readers(0).channel(); // channel name
+  reader_cfg.qos_profile.CopyFrom(config.readers(0).qos_profile()); // qos
+  reader_cfg.pending_queue_size = config.readers(0).pending_queue_size(); // queue size
 
-  auto role_attr = std::make_shared<proto::RoleAttributes>();
+  auto role_attr = std::make_shared<proto::RoleAttributes>(); // statistics role
   role_attr->set_node_name(config.name());
   role_attr->set_channel_name(config.readers(0).channel());
 
