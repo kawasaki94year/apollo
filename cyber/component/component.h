@@ -186,24 +186,32 @@ bool Component<M0, NullType, NullType, NullType>::Initialize(
   reader_cfg.pending_queue_size = config.readers(0).pending_queue_size(); // queue size
 
   auto role_attr = std::make_shared<proto::RoleAttributes>(); // statistics role
-  role_attr->set_node_name(config.name());
-  role_attr->set_channel_name(config.readers(0).channel());
+  role_attr->set_node_name(config.name()); //set Node name
+  role_attr->set_channel_name(config.readers(0).channel()); //set channel name
 
   std::weak_ptr<Component<M0>> self =
-      std::dynamic_pointer_cast<Component<M0>>(shared_from_this());
-  auto func = [self, role_attr](const std::shared_ptr<M0>& msg) {
-    auto start_time = Time::Now().ToMicrosecond();
-    auto ptr = self.lock();
+      std::dynamic_pointer_cast<Component<M0>>(shared_from_this()); //weak shelf for callback
+  auto func = [self, role_attr](const std::shared_ptr<M0>& msg) { //lambda function
+    auto start_time = Time::Now().ToMicrosecond(); //get start time
+    // lock weak pointer to access component
+    // if component is destroyed, log error
+    auto ptr = self.lock(); //lock weak pointer
+    // if component is still valid, call Process method
     if (ptr) {
       ptr->Process(msg);
     } else {
       AERROR << "Component object has been destroyed.";
     }
-    auto end_time = Time::Now().ToMicrosecond();
+    auto end_time = Time::Now().ToMicrosecond(); //get end time
+    // log processing time and cyber latency
+    // role_attr is used for statistics
     // sampling proc latency and cyber latency in microsecond
     uint64_t process_start_time;
     statistics::Statistics::Instance()->SamplingProcLatency<uint64_t>(
-        *role_attr, end_time - start_time);
+        *role_attr, end_time - start_time); // log processing latency
+    // check if process start time is available
+    // if available, log cyber latency
+    // cyber latency is the time from start to process start
     if (statistics::Statistics::Instance()->GetProcStatus(
             *role_attr, &process_start_time) &&
         (start_time - process_start_time) > 0) {
@@ -212,31 +220,33 @@ bool Component<M0, NullType, NullType, NullType>::Initialize(
     }
   };
 
-  std::shared_ptr<Reader<M0>> reader = nullptr;
+  std::shared_ptr<Reader<M0>> reader = nullptr; // reader pointer
 
   if (cyber_likely(is_reality_mode)) {
-    reader = node_->CreateReader<M0>(reader_cfg);
+    reader = node_->CreateReader<M0>(reader_cfg); // create normal reader
   } else {
-    reader = node_->CreateReader<M0>(reader_cfg, func);
+    reader = node_->CreateReader<M0>(reader_cfg, func); // with callback in sim mode
   }
 
   if (reader == nullptr) {
     AERROR << "Component create reader failed.";
     return false;
   }
-  readers_.emplace_back(std::move(reader));
+  readers_.emplace_back(std::move(reader)); //reader added to readers list
+  // if not in reality mode, return early
 
   if (cyber_unlikely(!is_reality_mode)) {
     return true;
   }
 
   data::VisitorConfig conf = {readers_[0]->ChannelId(),
-                              readers_[0]->PendingQueueSize()};
-  auto dv = std::make_shared<data::DataVisitor<M0>>(conf);
+                              readers_[0]->PendingQueueSize()}; // visitor config
+  auto dv = std::make_shared<data::DataVisitor<M0>>(conf); // data visitor for M0
+  // create routine factory with function and data visitor
   croutine::RoutineFactory factory =
-      croutine::CreateRoutineFactory<M0>(func, dv);
-  auto sched = scheduler::Instance();
-  return sched->CreateTask(factory, node_->Name());
+      croutine::CreateRoutineFactory<M0>(func, dv); // routine factory
+  auto sched = scheduler::Instance(); // scheduler
+  return sched->CreateTask(factory, node_->Name()); // start task
 }
 
 template <typename M0, typename M1>
