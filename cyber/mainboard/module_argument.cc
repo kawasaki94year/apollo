@@ -59,9 +59,10 @@ void ModuleArgument::DisplayUsage() {
         << "    " << binary_name_ << " --plugin plugin_xml_conf -d dag_conf ";
 }
 
+// parse the argument
 void ModuleArgument::ParseArgument(const int argc, char* const argv[]) {
-  binary_name_ = std::string(basename(argv[0]));
-  GetOptions(argc, argv);
+  binary_name_ = std::string(basename(argv[0])); // get the binary name
+  GetOptions(argc, argv); //parse command line options
 
   if (process_group_.empty()) {
     process_group_ = DEFAULT_process_group_;
