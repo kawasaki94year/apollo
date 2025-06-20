@@ -65,27 +65,27 @@ int main(int argc, char** argv) {
   // initialize cyber
   apollo::cyber::Init(argv[0], dag_info);
 
-  static bool enable_cpu_profile = module_args.GetEnableCpuprofile();
-  static bool enable_mem_profile = module_args.GetEnableHeapprofile();
-  std::signal(SIGTERM, [](int sig){
-    apollo::cyber::OnShutdown(sig);
-    if (enable_cpu_profile) {
-      ProfilerStop();
+  static bool enable_cpu_profile = module_args.GetEnableCpuprofile(); // check if cpu profile is enabled
+  static bool enable_mem_profile = module_args.GetEnableHeapprofile();//  check if memory profile is enabled
+  std::signal(SIGTERM, [](int sig){ // handle SIGTERM signal
+    apollo::cyber::OnShutdown(sig); // call shutdown handler
+    if (enable_cpu_profile) { 
+      ProfilerStop(); // stop cpu profiler
     }
 
     if (enable_mem_profile) {
-      HeapProfilerDump("Befor shutdown");
-      HeapProfilerStop();
+      HeapProfilerDump("Befor shutdown");// dump memory profile before shutdown
+      HeapProfilerStop(); // stop memory profiler
     }
   });
 
-  if (module_args.GetEnableHeapprofile()) {
-    auto profile_filename = module_args.GetHeapProfileFilename();
-    HeapProfilerStart(profile_filename.c_str());
+  if (module_args.GetEnableHeapprofile()) { // if memory profiling is enabled
+    auto profile_filename = module_args.GetHeapProfileFilename(); 
+    HeapProfilerStart(profile_filename.c_str()); // start memory profiler
   }
 
   // start module
-  ModuleController controller(module_args);
+  ModuleController controller(module_args); // create a module controller with the parsed arguments
   if (!controller.Init()) {
     controller.Clear();
     AERROR << "module start error.";
