@@ -72,7 +72,7 @@ bool ModuleController::LoadAll() {
   }
   return true;
 }
-
+// LoadAll
 bool ModuleController::LoadModule(const DagConfig& dag_config) {
   for (auto module_config : dag_config.module_config()) {
     std::string load_path;
@@ -84,26 +84,26 @@ bool ModuleController::LoadModule(const DagConfig& dag_config) {
     }
     AINFO << "mainboard: use module library " << load_path;
 
-    class_loader_manager_.LoadLibrary(load_path);
+    class_loader_manager_.LoadLibrary(load_path); // Load the module library
 
     for (auto& component : module_config.components()) {
-      const std::string& class_name = component.class_name();
+      const std::string& class_name = component.class_name(); // Get the class name of the component
       std::shared_ptr<ComponentBase> base =
-          class_loader_manager_.CreateClassObj<ComponentBase>(class_name);
-      if (base == nullptr || !base->Initialize(component.config())) {
+          class_loader_manager_.CreateClassObj<ComponentBase>(class_name); // Create a component object
+      if (base == nullptr || !base->Initialize(component.config())) { // Initialize the component
         return false;
       }
-      component_list_.emplace_back(std::move(base));
+      component_list_.emplace_back(std::move(base)); // Add the component to the list
     }
-
+    // If the module has timer components, create them
     for (auto& component : module_config.timer_components()) {
       const std::string& class_name = component.class_name();
       std::shared_ptr<ComponentBase> base =
-          class_loader_manager_.CreateClassObj<ComponentBase>(class_name);
+          class_loader_manager_.CreateClassObj<ComponentBase>(class_name);// Create a timer component object
       if (base == nullptr || !base->Initialize(component.config())) {
         return false;
       }
-      component_list_.emplace_back(std::move(base));
+      component_list_.emplace_back(std::move(base)); // Add the component to the list
     }
   }
   return true;
@@ -111,7 +111,7 @@ bool ModuleController::LoadModule(const DagConfig& dag_config) {
 
 bool ModuleController::LoadModule(const std::string& path) {
   DagConfig dag_config;
-  if (!common::GetProtoFromFile(path, &dag_config)) {
+  if (!common::GetProtoFromFile(path, &dag_config)) { // Load the DAG configuration from the file
     AERROR << "Get proto failed, file: " << path;
     return false;
   }
