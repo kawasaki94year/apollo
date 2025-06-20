@@ -93,11 +93,11 @@ void ModuleArgument::ParseArgument(const int argc, char* const argv[]) {
     heapprofile_filename_ = pwd + "/" + heapprofile_filename_;
   }
 
-  GlobalData::Instance()->SetProcessGroup(process_group_);
-  GlobalData::Instance()->SetSchedName(sched_name_);
+  GlobalData::Instance()->SetProcessGroup(process_group_); // set process group
+  GlobalData::Instance()->SetSchedName(sched_name_); // set sched name
   AINFO << "binary_name_ is " << binary_name_ << ", process_group_ is "
         << process_group_ << ", has " << dag_conf_list_.size() << " dag conf";
-  for (std::string& dag : dag_conf_list_) {
+  for (std::string& dag : dag_conf_list_) { // log dag conf
     AINFO << "dag_conf: " << dag;
   }
 }
