@@ -39,26 +39,27 @@ int main(int argc, char** argv) {
   module_args.ParseArgument(argc, argv);
 
   auto dag_list = module_args.GetDAGConfList(); //get the dag conf list
-
+// if the list is empty, return error
   std::string dag_info;
-  for (auto&& i = dag_list.begin(); i != dag_list.end(); i++) {
+  for (auto&& i = dag_list.begin(); i != dag_list.end(); i++) { // iterate through the dag conf list
     size_t pos = 0;
-    for (size_t j = 0; j < (*i).length(); j++) {
-      pos = ((*i)[j] == '/') ? j: pos;
+    for (size_t j = 0; j < (*i).length(); j++) { // find the last '/'
+      pos = ((*i)[j] == '/') ? j: pos; // update pos to last '/'
     }
-    if (i != dag_list.begin()) dag_info += "_";
+    if (i != dag_list.begin()) dag_info += "_"; // add '_' if not the first element
+    // append the substring after the last '/' to dag_info
 
     if (pos == 0) {
-      dag_info += *i;
+      dag_info += *i; // if no '/' found, use the whole string
     } else {
       dag_info +=
-        (pos == (*i).length()-1) ? (*i).substr(pos): (*i).substr(pos+1);
+        (pos == (*i).length()-1) ? (*i).substr(pos): (*i).substr(pos+1); // else use the substring after the last '/'
     }
   }
 
   if (module_args.GetProcessGroup() !=
         apollo::cyber::mainboard::DEFAULT_process_group_) {
-    dag_info = module_args.GetProcessGroup();
+    dag_info = module_args.GetProcessGroup(); // if process group is set, use it as dag_info
   }
 
   // initialize cyber
