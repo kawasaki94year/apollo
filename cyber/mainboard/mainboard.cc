@@ -38,7 +38,7 @@ int main(int argc, char** argv) {
   ModuleArgument module_args;
   module_args.ParseArgument(argc, argv);
 
-  auto dag_list = module_args.GetDAGConfList();
+  auto dag_list = module_args.GetDAGConfList(); //
 
   std::string dag_info;
   for (auto&& i = dag_list.begin(); i != dag_list.end(); i++) {
