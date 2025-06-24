@@ -63,7 +63,7 @@ class ClassLoaderManager {
 
  private:
   std::mutex libpath_loader_map_mutex_;
-  std::map<std::string, ClassLoader*> libpath_loader_map_;
+  std::map<std::string, ClassLoader*> libpath_loader_map_; // Map of library paths to ClassLoader objects
 };
 
 template <typename Base>
