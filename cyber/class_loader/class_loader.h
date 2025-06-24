@@ -41,25 +41,30 @@ class ClassLoader {
   bool LoadLibrary();//Load the library
   int UnloadLibrary();//unload the library
   const std::string GetLibraryPath() const; //Get the library path
+
   //Get the valid class names for a specific base class
   template <typename Base>
   std::vector<std::string> GetValidClassNames();
-  //Create a class object of the specified class name
+
+ // Create an object of a specific class name derived from Base
   template <typename Base>
-  std::shared_ptr<Base> CreateClassObj(const std::string& class_name);
+  std::shared_ptr<Base> CreateClassObj(const std::string& class_name); 
+
+  // Check if a class name is valid for a specific base class
   template <typename Base>
   bool IsClassValid(const std::string& class_name);
 
  private:
+ // Deleter for class objects created by CreateClassObj 
   template <typename Base>
   void OnClassObjDeleter(Base* obj);
 
  private:
-  std::string library_path_;
-  int loadlib_ref_count_;
-  std::mutex loadlib_ref_count_mutex_;
-  int classobj_ref_count_;
-  std::mutex classobj_ref_count_mutex_;
+  std::string library_path_; // Path to the library
+  int loadlib_ref_count_; // Reference count for the library load
+  std::mutex loadlib_ref_count_mutex_; //Class loading reference count lock
+  int classobj_ref_count_; // Reference count for class objects created
+  std::mutex classobj_ref_count_mutex_; //Class object reference count lock
 };
 
 template <typename Base>
@@ -77,19 +82,23 @@ bool ClassLoader::IsClassValid(const std::string& class_name) {
 template <typename Base>
 std::shared_ptr<Base> ClassLoader::CreateClassObj(
     const std::string& class_name) {
+      //load the library if not loaded
   if (!IsLibraryLoaded()) {
     LoadLibrary();
   }
 
-  Base* class_object = utility::CreateClassObj<Base>(class_name, this);
+  Base* class_object = utility::CreateClassObj<Base>(class_name, this); // Create an object of the class with the given name
   if (class_object == nullptr) {
     AWARN << "CreateClassObj failed, ensure class has been registered. "
           << "classname: " << class_name << ",lib: " << GetLibraryPath();
     return std::shared_ptr<Base>();
   }
 
-  std::lock_guard<std::mutex> lck(classobj_ref_count_mutex_);
+  // Increment the reference count for class objects
+  std::lock_guard<std::mutex> lck(classobj_ref_count_mutex_); 
   classobj_ref_count_ = classobj_ref_count_ + 1;
+  // Create a shared pointer with a custom deleter that decrements the reference count
+  // when the object is deleted
   std::shared_ptr<Base> classObjSharePtr(
       class_object, std::bind(&ClassLoader::OnClassObjDeleter<Base>, this,
                               std::placeholders::_1));
