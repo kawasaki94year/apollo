@@ -37,12 +37,14 @@ class ClassLoader {
   explicit ClassLoader(const std::string& library_path);
   virtual ~ClassLoader();
 
-  bool IsLibraryLoaded();
-  bool LoadLibrary();
-  int UnloadLibrary();
-  const std::string GetLibraryPath() const;
+  bool IsLibraryLoaded(); //Is the library loaded?
+  bool LoadLibrary();//Load the library
+  int UnloadLibrary();//unload the library
+  const std::string GetLibraryPath() const; //Get the library path
+  //Get the valid class names for a specific base class
   template <typename Base>
   std::vector<std::string> GetValidClassNames();
+  //Create a class object of the specified class name
   template <typename Base>
   std::shared_ptr<Base> CreateClassObj(const std::string& class_name);
   template <typename Base>
