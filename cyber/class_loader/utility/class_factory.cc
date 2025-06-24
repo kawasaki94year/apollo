@@ -24,6 +24,7 @@ namespace utility {
 
 AbstractClassFactoryBase::AbstractClassFactoryBase(
     const std::string& class_name, const std::string& base_class_name)
+    //initialize the relative library path to empty string
     : relative_library_path_(""),
       base_class_name_(base_class_name),
       class_name_(class_name) {}
@@ -35,13 +36,14 @@ void AbstractClassFactoryBase::SetRelativeLibraryPath(
   relative_library_path_ = library_path;
 }
 
+//set the relative library path to empty string
 void AbstractClassFactoryBase::AddOwnedClassLoader(ClassLoader* loader) {
   if (std::find(relative_class_loaders_.begin(), relative_class_loaders_.end(),
                 loader) == relative_class_loaders_.end()) {
     relative_class_loaders_.emplace_back(loader);
   }
 }
-
+// Remove the class loader from the list of owned class loaders
 void AbstractClassFactoryBase::RemoveOwnedClassLoader(
     const ClassLoader* loader) {
   std::vector<ClassLoader*>::iterator itr = std::find(
@@ -51,20 +53,30 @@ void AbstractClassFactoryBase::RemoveOwnedClassLoader(
   }
 }
 
+// Check if the class factory is owned by a specific class loader
+// Returns true if the loader is found in the list of relative class loaders
 bool AbstractClassFactoryBase::IsOwnedBy(const ClassLoader* loader) {
   std::vector<ClassLoader*>::iterator itr = std::find(
       relative_class_loaders_.begin(), relative_class_loaders_.end(), loader);
   return itr != relative_class_loaders_.end();
 }
 
+// Check if the class factory is owned by any class loader
+// Returns true if the list of relative class loaders is not empty
 bool AbstractClassFactoryBase::IsOwnedByAnybody() {
   return !relative_class_loaders_.empty();
 }
 
+// Get the list of class loaders that own this class factory
+// Returns a vector of pointers to ClassLoader objects
 std::vector<ClassLoader*> AbstractClassFactoryBase::GetRelativeClassLoaders() {
   return relative_class_loaders_;
 }
 
+// Getters for the relative library path, base class name, and class name
+// Returns the relative library path as a string
+// Returns the base class name as a string
+// Returns the class name as a string
 const std::string AbstractClassFactoryBase::GetRelativeLibraryPath() const {
   return relative_library_path_;
 }
