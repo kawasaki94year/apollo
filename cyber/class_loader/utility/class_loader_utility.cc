@@ -192,11 +192,14 @@ bool IsLibraryLoaded(const std::string& library_path,
 }
 
 bool LoadLibrary(const std::string& library_path, ClassLoader* loader) {
+  // Check if the library is already loaded by this loader
   if (IsLibraryLoadedByAnybody(library_path)) {
     AINFO << "lib has been loaded by others,only attach to class factory obj."
           << library_path;
     ClassFactoryVector lib_class_factory_objs =
         GetAllClassFactoryObjectsOfLibrary(library_path);
+    // If the library is already loaded, we just add the loader to the
+    // class factory objects that belong to this library.
     for (auto& class_factory_obj : lib_class_factory_objs) {
       class_factory_obj->AddOwnedClassLoader(loader);
     }
@@ -209,6 +212,7 @@ bool LoadLibrary(const std::string& library_path, ClassLoader* loader) {
     std::lock_guard<std::recursive_mutex> lck(loader_mutex);
 
     try {
+      // Set the current loading library name and active class loader
       SetCurActiveClassLoader(loader);
       SetCurLoadingLibraryName(library_path);
       shared_library = SharedLibraryPtr(new SharedLibrary(library_path));
