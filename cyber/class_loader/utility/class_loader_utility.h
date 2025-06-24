@@ -73,6 +73,11 @@ Base* CreateClassObj(const std::string& class_name, ClassLoader* loader);
 template <typename Base>
 std::vector<std::string> GetValidClassNames(ClassLoader* loader);
 
+// Register a class with the class factory system.
+// This function creates a new class factory object for the derived class
+// and associates it with the specified base class.
+// The class factory object is then added to the class factory map for the
+// base class, and the current loading library name is set.
 template <typename Derived, typename Base>
 void RegisterClass(const std::string& class_name,
                    const std::string& base_class_name) {
@@ -91,6 +96,11 @@ void RegisterClass(const std::string& class_name,
   GetClassFactoryMapMapMutex().unlock();
 }
 
+/// Create an instance of the class specified by class_name
+/// using the class factory registered for the base class Base.
+/// Returns a pointer to the created object, or nullptr if the class
+/// factory for the specified class_name does not exist or is not owned by the
+/// provided ClassLoader.
 template <typename Base>
 Base* CreateClassObj(const std::string& class_name, ClassLoader* loader) {
   GetClassFactoryMapMapMutex().lock();
@@ -102,7 +112,7 @@ Base* CreateClassObj(const std::string& class_name, ClassLoader* loader) {
         factoryMap[class_name]);
   }
   GetClassFactoryMapMapMutex().unlock();
-
+  // Check if the factory is valid and owned by the loader
   Base* classobj = nullptr;
   if (factory && factory->IsOwnedBy(loader)) {
     classobj = factory->CreateObj();
@@ -111,6 +121,10 @@ Base* CreateClassObj(const std::string& class_name, ClassLoader* loader) {
   return classobj;
 }
 
+/// Get a list of valid class names for the specified base class.
+/// This function retrieves all class names registered with the class factory
+/// system for the base class Base, and filters them to include only those
+/// that are owned by the specified ClassLoader.
 template <typename Base>
 std::vector<std::string> GetValidClassNames(ClassLoader* loader) {
   std::lock_guard<std::recursive_mutex> lck(GetClassFactoryMapMapMutex());
