@@ -249,6 +249,7 @@ bool Component<M0, NullType, NullType, NullType>::Initialize(
   return sched->CreateTask(factory, node_->Name()); // start task
 }
 
+// process two messages
 template <typename M0, typename M1>
 bool Component<M0, M1, NullType, NullType>::Process(
     const std::shared_ptr<M0>& msg0, const std::shared_ptr<M1>& msg1) {
@@ -258,10 +259,12 @@ bool Component<M0, M1, NullType, NullType>::Process(
   return Proc(msg0, msg1);
 }
 
+//initialize component with two messages
 template <typename M0, typename M1>
 bool Component<M0, M1, NullType, NullType>::Initialize(
     const ComponentConfig& config) {
-  node_.reset(new Node(config.name()));
+  node_.reset(new Node(config.name())); // create node with name from config
+  // load additional config files
   LoadConfigFiles(config);
 
   if (config.readers_size() < 2) {
@@ -274,12 +277,14 @@ bool Component<M0, M1, NullType, NullType>::Initialize(
     return false;
   }
 
-  bool is_reality_mode = GlobalData::Instance()->IsRealityMode();
+  bool is_reality_mode = GlobalData::Instance()->IsRealityMode(); // check if in reality mode
 
+  // create reader config from protobuf
+  // for the second message type
   ReaderConfig reader_cfg;
   reader_cfg.channel_name = config.readers(1).channel();
-  reader_cfg.qos_profile.CopyFrom(config.readers(1).qos_profile());
-  reader_cfg.pending_queue_size = config.readers(1).pending_queue_size();
+  reader_cfg.qos_profile.CopyFrom(config.readers(1).qos_profile()); // copy QoS profile
+  reader_cfg.pending_queue_size = config.readers(1).pending_queue_size();// queue size
 
   auto reader1 = node_->template CreateReader<M1>(reader_cfg);
 
@@ -287,14 +292,20 @@ bool Component<M0, M1, NullType, NullType>::Initialize(
   reader_cfg.qos_profile.CopyFrom(config.readers(0).qos_profile());
   reader_cfg.pending_queue_size = config.readers(0).pending_queue_size();
 
+  // create role attributes for statistics
+  // role attributes include node name and channel name
   auto role_attr = std::make_shared<proto::RoleAttributes>();
   role_attr->set_node_name(config.name());
   role_attr->set_channel_name(config.readers(0).channel());
 
   std::shared_ptr<Reader<M0>> reader0 = nullptr;
+  // create reader for the first message type
+  // if in reality mode, create normal reader
   if (cyber_likely(is_reality_mode)) {
     reader0 = node_->template CreateReader<M0>(reader_cfg);
   } else {
+    // if in simulation mode, create reader with callback
+    // the callback will process messages from both readers
     std::weak_ptr<Component<M0, M1>> self =
         std::dynamic_pointer_cast<Component<M0, M1>>(shared_from_this());
 
@@ -331,6 +342,8 @@ bool Component<M0, M1, NullType, NullType>::Initialize(
     AERROR << "Component create reader failed.";
     return false;
   }
+  // add readers to the component's readers list
+  // readers_ is a vector of shared pointers to Reader objects
   readers_.push_back(std::move(reader0));
   readers_.push_back(std::move(reader1));
 
@@ -368,6 +381,8 @@ bool Component<M0, M1, NullType, NullType>::Initialize(
     config_list.emplace_back(reader->ChannelId(), reader->PendingQueueSize());
   }
   auto dv = std::make_shared<data::DataVisitor<M0, M1>>(config_list);
+  //create routine factory with function and data visitor
+  // the factory will create a routine that processes messages from both readers
   croutine::RoutineFactory factory =
       croutine::CreateRoutineFactory<M0, M1>(func, dv);
   return sched->CreateTask(factory, node_->Name());
