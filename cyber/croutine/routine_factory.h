@@ -69,11 +69,12 @@ RoutineFactory CreateRoutineFactory(
   return factory;
 }
 
+//create routine factory for two messages
 template <typename M0, typename M1, typename F>
 RoutineFactory CreateRoutineFactory(
     F&& f, const std::shared_ptr<data::DataVisitor<M0, M1>>& dv) {
   RoutineFactory factory;
-  factory.SetDataVisitor(dv);
+  factory.SetDataVisitor(dv); //set data visitor
   factory.create_routine = [=]() {
     return [=]() {
       std::shared_ptr<M0> msg0;
@@ -81,8 +82,8 @@ RoutineFactory CreateRoutineFactory(
       for (;;) {
         CRoutine::GetCurrentRoutine()->set_state(RoutineState::DATA_WAIT);
         if (dv->TryFetch(msg0, msg1)) {
-          f(msg0, msg1);
-          CRoutine::Yield(RoutineState::READY);
+          f(msg0, msg1); // call function with messages
+          CRoutine::Yield(RoutineState::READY); // yield with READY state
         } else {
           CRoutine::Yield();
         }
