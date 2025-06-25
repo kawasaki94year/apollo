@@ -380,7 +380,7 @@ bool Component<M0, M1, NullType, NullType>::Initialize(
   for (auto& reader : readers_) {
     config_list.emplace_back(reader->ChannelId(), reader->PendingQueueSize());
   }
-  auto dv = std::make_shared<data::DataVisitor<M0, M1>>(config_list);
+  auto dv = std::make_shared<data::DataVisitor<M0, M1>>(config_list); //create data visitor
   //create routine factory with function and data visitor
   // the factory will create a routine that processes messages from both readers
   croutine::RoutineFactory factory =
