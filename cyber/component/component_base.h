@@ -47,6 +47,8 @@ class ComponentBase : public std::enable_shared_from_this<ComponentBase> { // ba
 
   virtual bool Initialize(const ComponentConfig& config) { return false; } // init with component config
   virtual bool Initialize(const TimerComponentConfig& config) { return false; } // init with timer config
+
+  //shutdown the component, clean up resources
   virtual void Shutdown() { // clean up resources
     if (is_shutdown_.exchange(true)) { // check already shutdown
       return; // ignore repeated calls
@@ -59,6 +61,7 @@ class ComponentBase : public std::enable_shared_from_this<ComponentBase> { // ba
     scheduler::Instance()->RemoveTask(node_->Name()); // remove task from scheduler
   }
 
+    //get protobuf config from file
   template <typename T>
   bool GetProtoConfig(T* config) const { // load protobuf config file
     return common::GetProtoFromFile(config_file_path_, config); // parse proto
@@ -79,7 +82,8 @@ class ComponentBase : public std::enable_shared_from_this<ComponentBase> { // ba
         AINFO << "use config file: " << config_file_path_; // record actual path
       }
     }
-
+    // optional flag file path
+    // if provided, resolve it with environment variable
     if (!config.flag_file_path().empty()) { // optional gflags file
       std::string flag_file_path = config.flag_file_path();  // path buffer
       if (!common::GetFilePathWithEnv(config.flag_file_path(),
