@@ -384,7 +384,8 @@ bool Component<M0, M1, NullType, NullType>::Initialize(
   //create routine factory with function and data visitor
   // the factory will create a routine that processes messages from both readers
   croutine::RoutineFactory factory =
-      croutine::CreateRoutineFactory<M0, M1>(func, dv);
+      croutine::CreateRoutineFactory<M0, M1>(func, 
+        dv);
   return sched->CreateTask(factory, node_->Name()); //create task in scheduler
 }
 
