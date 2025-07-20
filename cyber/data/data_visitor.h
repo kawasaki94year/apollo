@@ -56,10 +56,14 @@ class DataVisitor : public DataVisitorBase {
                    new BufferType<M2>(configs[2].queue_size)),
         buffer_m3_(configs[3].channel_id,
                    new BufferType<M3>(configs[3].queue_size)) {
+    //add buffers to data dispatcher
+    // this allows the data visitor to fetch messages from these channels
     DataDispatcher<M0>::Instance()->AddBuffer(buffer_m0_);
     DataDispatcher<M1>::Instance()->AddBuffer(buffer_m1_);
     DataDispatcher<M2>::Instance()->AddBuffer(buffer_m2_);
     DataDispatcher<M3>::Instance()->AddBuffer(buffer_m3_);
+    //create notifier for data visitor
+    // this allows the data visitor to be notified when new messages arrive
     data_notifier_->AddNotifier(buffer_m0_.channel_id(), notifier_);
     data_fusion_ = new fusion::AllLatest<M0, M1, M2, M3>(
         buffer_m0_, buffer_m1_, buffer_m2_, buffer_m3_);
