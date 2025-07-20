@@ -38,8 +38,10 @@ bool TimerComponent::Initialize(const TimerComponentConfig& config) {
     AERROR << "Missing required field in config file.";
     return false;
   }
+  //create node with name from config
   node_.reset(new Node(config.name()));
   LoadConfigFiles(config);
+  //load additional config files
   if (!Init()) {
     return false;
   }
@@ -52,6 +54,8 @@ bool TimerComponent::Initialize(const TimerComponentConfig& config) {
 
   std::shared_ptr<TimerComponent> self =
       std::dynamic_pointer_cast<TimerComponent>(shared_from_this());
+  // create a lambda function to process the timer
+  // it captures the shared pointer to self and role attributes
   auto func = [self, role_attr]() {
     auto start_time = Time::Now().ToNanosecond();
     self->Process();
