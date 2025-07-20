@@ -32,8 +32,9 @@ namespace data {
 
 class DataVisitorBase {
  public:
-  DataVisitorBase() : notifier_(new Notifier()) {}
+  DataVisitorBase() : notifier_(new Notifier()) {} //create notifier for data visitor
 
+  //set callback for data visitor
   void RegisterNotifyCallback(std::function<void()>&& callback) {
     notifier_->callback = callback;
   }
@@ -42,7 +43,9 @@ class DataVisitorBase {
   DataVisitorBase(const DataVisitorBase&) = delete;
   DataVisitorBase& operator=(const DataVisitorBase&) = delete;
 
+  //next message index for data visitor
   uint64_t next_msg_index_ = 0;
+  //data notifier instance for data visitor
   DataNotifier* data_notifier_ = DataNotifier::Instance();
   std::shared_ptr<Notifier> notifier_;
 };
