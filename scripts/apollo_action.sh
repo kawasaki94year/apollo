@@ -274,9 +274,12 @@ function run_bazel_build() {
   local job_args="-j=$(nproc) -m=0.7"
   [[ -z $ACTION ]] && ACTION="build"
   [[ $ACTION == "test" ]] && job_args="" && CMDLINE_OPTIONS=""
-  buildtool $ACTION ${CMDLINE_OPTIONS} ${job_args} -p ${build_targets} ${ADDTIONAL_OPTIONS}
-
-  [[ $? -ne 0 ]] && error "Build failed!" && exit -1
+  # Build result handling fixed on 2026-09-09 by Alanxu: the old trailing
+  # conditional returned 1 after a successful build and made apollo.sh fail.
+  if ! buildtool $ACTION ${CMDLINE_OPTIONS} ${job_args} -p ${build_targets} ${ADDTIONAL_OPTIONS}; then
+    error "Build failed!"
+    return 1
+  fi
 }
 
 function main() {
@@ -298,4 +301,3 @@ function main() {
 }
 
 main "$@"
-
