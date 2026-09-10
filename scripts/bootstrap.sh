@@ -33,20 +33,28 @@ function studio_connector_launch_file() {
     echo "${user_launch}"
     return 0
   fi
-  local package_launch="${APOLLO_ROOT_DIR}/modules/studio_connector/studio_connector.launch"
-  if [[ -f "${package_launch}" ]]; then
-    echo "${package_launch}"
-    return 0
-  fi
   # A development checkout can be mounted at /apollo_workspace while the
-  # installed Connector package remains under APOLLO_DISTRIBUTION_HOME
-  # (normally /apollo). Keep start_plus working in that layout as well.
-  local distribution_launch="${APOLLO_DISTRIBUTION_HOME:-/apollo}/modules/studio_connector/studio_connector.launch"
-  if [[ -f "${distribution_launch}" ]]; then
-    echo "${distribution_launch}"
-    return 0
-  fi
+  # installed Connector launch file is linked into /apollo. Check all known
+  # roots because APOLLO_DISTRIBUTION_HOME may correctly point to /opt/apollo/neo
+  # for plugin binaries while the runtime package links remain under /apollo.
+  local candidate_root
+  for candidate_root in \
+    "${APOLLO_ROOT_DIR:-}" \
+    "${APOLLO_DISTRIBUTION_HOME:-}" \
+    "${APOLLO_RUNTIME_PATH:-}" \
+    "/apollo"; do
+    if [[ -n "${candidate_root}" &&
+          -f "${candidate_root}/modules/studio_connector/studio_connector.launch" ]]; then
+      echo "${candidate_root}/modules/studio_connector/studio_connector.launch"
+      return 0
+    fi
+  done
   return 1
+}
+
+function studio_connector_is_running() {
+  # Bracket the first character so pgrep does not match its own command line.
+  pgrep -f '[m]ainboard.*studio_connector.dag' >/dev/null 2>&1
 }
 
 function start_studio_connector() {
@@ -67,8 +75,8 @@ function start_studio_connector() {
   # asynchronous launch to become visible before starting a second instance;
   # duplicate Cyber nodes terminate one of the two processes.
   for _ in {1..10}; do
-    if pgrep -f "cyber_launch start ${launch_file}" >/dev/null 2>&1 ||
-      pgrep -f "mainboard.*studio_connector.dag" >/dev/null 2>&1; then
+    if pgrep -f "[c]yber_launch start ${launch_file}" >/dev/null 2>&1 ||
+      studio_connector_is_running; then
       echo "Studio Connector is already running."
       return 0
     fi
@@ -79,8 +87,11 @@ function start_studio_connector() {
   # Package launch files use paths relative to their Apollo distribution root,
   # which can differ from the mounted source root in a development container.
   local launch_root="${APOLLO_ROOT_DIR}"
-  if [[ "${launch_file}" == "${APOLLO_DISTRIBUTION_HOME:-/apollo}"/* ]]; then
-    launch_root="${APOLLO_DISTRIBUTION_HOME:-/apollo}"
+  # Package launch files refer to modules by a path relative to the directory
+  # before /modules. Deriving it from the selected file also handles the
+  # /apollo symlinks used by installed Neo packages.
+  if [[ "${launch_file}" == */modules/* ]]; then
+    launch_root="${launch_file%%/modules/*}"
   fi
   (
     cd "${launch_root}" || exit 1
@@ -88,7 +99,7 @@ function start_studio_connector() {
       >"${APOLLO_ROOT_DIR}/data/log/studio_connector.launch.out" 2>&1
   ) &
   sleep 2
-  if ! pgrep -f "mainboard.*studio_connector.dag" >/dev/null 2>&1; then
+  if ! studio_connector_is_running; then
     echo "Failed to start Studio Connector. Check ${APOLLO_ROOT_DIR}/data/log/studio_connector.launch.out" >&2
     return 1
   fi
@@ -100,7 +111,7 @@ function stop_studio_connector() {
   if [[ -z "${launch_file}" ]]; then
     return 0
   fi
-  if pgrep -f "mainboard.*studio_connector.dag" >/dev/null 2>&1; then
+  if studio_connector_is_running; then
     echo "Stopping Studio Connector"
     cyber_launch stop "${launch_file}" || true
   fi

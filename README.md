@@ -275,9 +275,42 @@ Dreamview+ 的 HMI 状态没有更新，因此网页看不到新资源。日志�
 - `scripts/bootstrap.sh`
   - 当源码挂载目录是 `/apollo_workspace`、运行时包目录是 `/apollo` 时，
     `start_plus` 也能找到并启动 Studio Connector。
+  - 同时兼容插件二进制位于 `/opt/apollo/neo`、Connector 启动链接位于
+    `/apollo/modules` 的开发容器布局。
 - `scripts/configure_dv_studio_connector.sh`
   - 对只有账号证书、没有用户 DAG 的新安装器输出使用系统 Connector DAG；
   - 将插件元数据中的相对启动命令改为带正确工作目录的命令，避免重复启动或登录失败。
+- `scripts/apollo.bashrc`
+  - 校验 `APOLLO_DISTRIBUTION_HOME` 是否真的包含
+    `share/cyber_plugin_index`；
+  - 在源码目录和 Neo 安装目录分离时，自动使用 `/opt/apollo/neo` 的插件索引、
+    描述文件和动态库路径，确保 simulator_tool 被 Dreamview+ 加载。
+
+### 场景资源下载后在哪里加载
+
+Dreamview+ 的“资源管理 -> 场景”页面负责从 Apollo Studio 下载场景集；它不是
+场景仿真的选择页面。下载完成后，场景会自动重新加载到 HMI 状态中。选择和加载
+场景的位置是：
+
+```text
+模式设置 -> 运行模式：场景仿真 -> 环境资源 -> 场景
+```
+
+在“场景”列表中先展开场景集，再点击具体场景。Dreamview+ 会自动切换该场景
+需要的高精地图；然后在底部场景仿真栏启动仿真。若“场景仿真”或“场景”入口
+完全不显示，通常是 simulator_tool 没有被加载，而不是场景文件没有下载。
+
+可用下面命令确认插件已加载：
+
+```bash
+grep -aE 'simulator_tool|RegisterUpdaterHandlers: plugins/sim/sim_hmi|Instance:.*SimulatorPlugin' \
+  /apollo/data/log/dreamview_plus.log.INFO.* | tail -20
+```
+
+正常日志应包含 `SimulatorPlugin`、`plugins/sim/sim_hmi` 和
+`simulator_tool/libdv_simulator_plugin.so`。修复环境后必须重启 Dreamview+，并在
+浏览器执行强制刷新（Linux/Windows 通常为 `Ctrl+Shift+R`），让新的仿真状态通道
+和前端资源生效。
 
 ### 从源码运行和验证
 

@@ -32,7 +32,11 @@ fi
 configure_plugin_launch_command() {
   local package_root=""
   local candidate_root
-  for candidate_root in "${APOLLO_ROOT_DIR:-}" "${APOLLO_DISTRIBUTION_HOME:-/apollo}"; do
+  for candidate_root in \
+    "${APOLLO_ROOT_DIR:-}" \
+    "${APOLLO_DISTRIBUTION_HOME:-}" \
+    "${APOLLO_RUNTIME_PATH:-}" \
+    "/apollo"; do
     if [[ -n "${candidate_root}" &&
           -f "${candidate_root}/modules/studio_connector/studio_connector.launch" ]]; then
       package_root="${candidate_root}"

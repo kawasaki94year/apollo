@@ -39,10 +39,35 @@ export APOLLO_LAUNCH_PATH="${APOLLO_ROOT_DIR}"
 export APOLLO_MODEL_PATH="${APOLLO_ROOT_DIR}/modules/perception/data/models"
 
 export APOLLO_DISTRIBUTION_VERSION=9.0
-export APOLLO_DISTRIBUTION_HOME="${APOLLO_DISTRIBUTION_HOME:=/apollo}"
+# In a development container the source tree is usually mounted at
+# /apollo_workspace, while Neo packages (including Dreamview+ plugins) are
+# installed under /opt/apollo/neo. A stale APOLLO_DISTRIBUTION_HOME=/apollo
+# makes Cyber search /apollo/share/cyber_plugin_index, so installed plugins
+# such as simulator_tool are silently skipped. Prefer a configured directory
+# only when it contains a plugin index, then fall back to the standard Neo
+# package location.
+configured_distribution_home="${APOLLO_DISTRIBUTION_HOME:-}"
+if [[ -n "${configured_distribution_home}" &&
+      -d "${configured_distribution_home}/share/cyber_plugin_index" ]]; then
+  APOLLO_DISTRIBUTION_HOME="${configured_distribution_home}"
+elif [[ -d "/opt/apollo/neo/share/cyber_plugin_index" ]]; then
+  APOLLO_DISTRIBUTION_HOME="/opt/apollo/neo"
+elif [[ -d "/apollo/share/cyber_plugin_index" ]]; then
+  APOLLO_DISTRIBUTION_HOME="/apollo"
+elif [[ -n "${configured_distribution_home}" ]]; then
+  # Keep custom installations usable even before their plugin index is built.
+  APOLLO_DISTRIBUTION_HOME="${configured_distribution_home}"
+else
+  APOLLO_DISTRIBUTION_HOME="/apollo"
+fi
+unset configured_distribution_home
+export APOLLO_DISTRIBUTION_HOME
 export APOLLO_PLUGIN_INDEX_PATH="${APOLLO_DISTRIBUTION_HOME}/share/cyber_plugin_index"
 export APOLLO_PLUGIN_SEARCH_IN_BAZEL_OUTPUT=1
-export APOLLO_PLUGIN_DESCRIPTION_PATH="${APOLLO_ROOT_DIR}"
+# Plugin index entries contain paths relative to the source tree or the Neo
+# package's share directory. Search both so a mounted source checkout can use
+# installed plugin metadata without requiring a duplicate source checkout.
+export APOLLO_PLUGIN_DESCRIPTION_PATH="${APOLLO_ROOT_DIR}:${APOLLO_DISTRIBUTION_HOME}"
 export APOLLO_PLUGIN_LIB_PATH="${APOLLO_ROOT_DIR}/bazel-bin:${APOLLO_DISTRIBUTION_HOME}/lib"
 
 export TAB="    " # 4 spaces
