@@ -39,6 +39,26 @@ std::map<std::string, int> socket_manager_function_map = {
     {"SimControlRestart", 0},
     {"MapServiceReloadMap", 1},
 };
+
+// Plugin callbacks cross a process boundary, so do not rely on implicit JSON
+// conversions here. A malformed or older plugin message must fail the request
+// instead of throwing from the Dreamview process.
+bool GetPluginStringParameter(const nlohmann::json& param_json,
+                              const std::string& key, std::string* value) {
+  if (!param_json.is_object() || value == nullptr) {
+    return false;
+  }
+  const auto data_it = param_json.find("data");
+  if (data_it == param_json.end() || !data_it->is_object()) {
+    return false;
+  }
+  const auto value_it = data_it->find(key);
+  if (value_it == data_it->end() || !value_it->is_string()) {
+    return false;
+  }
+  *value = value_it->get<std::string>();
+  return true;
+}
 }  // namespace
 
 namespace apollo {
@@ -225,39 +245,48 @@ bool Dreamview::PluginCallbackHMI(const std::string& function_name,
     case 0: {
       // Apollo Studio sends the scenario-set id/name after the files are
       // downloaded. Rebuild the local HMIStatus entry from those files.
-      if (param_json.contains("data") &&
-          param_json["data"].contains("scenario_set_id") &&
-          param_json["data"].contains("scenario_set_name")) {
-        const std::string scenario_set_id =
-            param_json["data"]["scenario_set_id"];
-        const std::string scenario_set_name =
-            param_json["data"]["scenario_set_name"];
+      std::string scenario_set_id;
+      std::string scenario_set_name;
+      if (GetPluginStringParameter(param_json, "scenario_set_id",
+                                   &scenario_set_id) &&
+          GetPluginStringParameter(param_json, "scenario_set_name",
+                                   &scenario_set_name)) {
         callback_res = hmi_->UpdateScenarioSetToStatus(scenario_set_id,
                                                        scenario_set_name);
+      } else {
+        AERROR << "Invalid UpdateScenarioSetToStatus callback payload.";
       }
     } break;
     case 1: {
       callback_res = hmi_->UpdateRecordToStatus();
     } break;
     case 2: {
-      if (param_json["data"].contains("dynamic_model_name")) {
-        const std::string dynamic_model_name =
-            param_json["data"]["dynamic_model_name"];
-        if (!dynamic_model_name.empty()) {
-          callback_res = hmi_->UpdateDynamicModelToStatus(dynamic_model_name);
-        }
+      std::string dynamic_model_name;
+      if (GetPluginStringParameter(param_json, "dynamic_model_name",
+                                   &dynamic_model_name) &&
+          !dynamic_model_name.empty()) {
+        callback_res = hmi_->UpdateDynamicModelToStatus(dynamic_model_name);
+      } else {
+        AERROR << "Invalid UpdateDynamicModelToStatus callback payload.";
       }
     } break;
     case 3: {
       callback_res = hmi_->UpdateVehicleToStatus();
     } break;
     case 4: {
-      if (param_json.contains("data") &&
-          param_json["data"].contains("resource_id")) {
-        const std::string map_name = param_json["data"]["resource_id"];
+      std::string map_name;
+      if (GetPluginStringParameter(param_json, "resource_id", &map_name)) {
         callback_res = hmi_->UpdateMapToStatus(map_name);
-      } else {
+      } else if (!param_json.is_object() || param_json.find("data") ==
+                                               param_json.end() ||
+                 !param_json["data"].is_object() ||
+                 param_json["data"].find("resource_id") ==
+                     param_json["data"].end()) {
+        // Keep support for older plugins which issue a map refresh without a
+        // resource id.
         callback_res = hmi_->UpdateMapToStatus();
+      } else {
+        AERROR << "Invalid UpdateMapToStatus callback payload.";
       }
     } break;
     default:

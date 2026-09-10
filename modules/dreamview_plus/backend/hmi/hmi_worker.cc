@@ -16,6 +16,8 @@
 
 #include "modules/dreamview_plus/backend/hmi/hmi_worker.h"
 
+#include <algorithm>
+#include <cctype>
 #include <dirent.h>
 #include <cstdio>
 #include <cstring>
@@ -81,6 +83,16 @@ const std::vector<HMIModeOperation> OperationBasedOnSimControl = {
     HMIModeOperation::Scenario_Sim,
     HMIModeOperation::Sim_Control,
 };
+
+bool IsSafeScenarioSetId(const std::string& scenario_set_id) {
+  if (scenario_set_id.empty()) {
+    return false;
+  }
+  return std::all_of(
+      scenario_set_id.begin(), scenario_set_id.end(), [](unsigned char ch) {
+        return std::isalnum(ch) || ch == '_' || ch == '-';
+      });
+}
 
 template <class FlagType, class ValueType>
 void SetGlobalFlag(std::string_view flag_name, const ValueType &value,
@@ -916,12 +928,9 @@ bool HMIWorker::UpdateScenarioSetToStatus(
     AERROR << "Scenario set id and name must not be empty.";
     return false;
   }
-  // The ID is used as a directory name. Reject path-like values received from
-  // the plugin before constructing a local resource path.
-  if (scenario_set_id.find('/') != std::string::npos ||
-      scenario_set_id.find("..") != std::string::npos ||
-      scenario_set_id.find(' ') != std::string::npos ||
-      scenario_set_id.find('~') != std::string::npos) {
+  // The ID is used as a directory name. Restrict it to the IDs emitted by
+  // Apollo Studio before constructing a local resource path.
+  if (!IsSafeScenarioSetId(scenario_set_id)) {
     AERROR << "Invalid scenario set id: " << scenario_set_id;
     return false;
   }
@@ -947,6 +956,10 @@ bool HMIWorker::UpdateScenarioSet(const std::string &scenario_set_id,
                                   const std::string &scenario_set_name,
                                   ScenarioSet *new_scenario_set) {
   CHECK_NOTNULL(new_scenario_set);
+  if (!IsSafeScenarioSetId(scenario_set_id)) {
+    AERROR << "Invalid scenario set id: " << scenario_set_id;
+    return false;
+  }
   std::string scenario_set_directory_path;
   if (!GetScenarioSetPath(scenario_set_id, &scenario_set_directory_path)) {
     AERROR << "Cannot get scenario set path for " << scenario_set_id;
@@ -1047,10 +1060,13 @@ bool HMIWorker::LoadScenarios() {
   }
 
   std::map<std::string, ScenarioSet> scenario_sets;
+  // d_type is DT_UNKNOWN on common network and overlay filesystems. The
+  // metadata parse below distinguishes usable scenario-set directories, so
+  // valid Studio resources are not silently skipped.
   struct dirent *file;
   while ((file = readdir(directory)) != nullptr) {
     if (!strcmp(file->d_name, ".") || !strcmp(file->d_name, "..") ||
-        file->d_type != DT_DIR) {
+        !IsSafeScenarioSetId(file->d_name)) {
       continue;
     }
 
@@ -1559,7 +1575,9 @@ bool HMIWorker::UpdateMapToStatus(const std::string &map_tar_name) {
   std::string map_name_prefix;
   // Apollo Studio can deliver either the legacy .tar.xz package or the
   // connector's .zip package. Both are unpacked into the map data directory.
-  if (map_tar_name[0] != '.' &&
+  if (map_tar_name.front() != '.' &&
+      map_tar_name.find('/') == std::string::npos &&
+      map_tar_name.find('\\') == std::string::npos &&
       (absl::EndsWith(map_tar_name, ".tar.xz") ||
        absl::EndsWith(map_tar_name, ".zip"))) {
     const size_t suffix_index = map_tar_name.rfind('.');

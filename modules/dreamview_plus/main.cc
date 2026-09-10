@@ -14,6 +14,7 @@
  * limitations under the License.
  *****************************************************************************/
 
+#include <cstdlib>
 #include <filesystem>
 #include <string>
 #include <vector>

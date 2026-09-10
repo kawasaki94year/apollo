@@ -500,6 +500,90 @@ cyber_recorder play -f "$HOME/.apollo/resources/records/demo_3.5.record" -l
 
 插件安装完成后需要重启 Dreamview，使新插件生效。
 
+### Dreamview+ v0.01（Apollo 10.0）运行与验收
+
+本分支为 `apollo-10.0`，对应 Git 标签为 `v0.01`。以下命令以 Linux 主机、Docker 已安装且当前用户能够访问 Docker 为前提；命令中的 `<APOLLO_ROOT>` 表示仓库根目录。
+
+1. 获取代码并进入分支：
+
+   ```bash
+   git clone git@github.com:kawasaki94year/apollo.git
+   cd apollo
+   git checkout apollo-10.0
+   git describe --tags --exact-match  # 应输出 v0.01
+   ```
+
+2. 启动并进入 Apollo 开发容器。首次执行会拉取镜像并初始化开发环境：
+
+   ```bash
+   ./docker/scripts/dev_start.sh
+   ./docker/scripts/dev_into.sh
+   ```
+
+3. 在容器内确认工作目录。不同镜像中仓库可能挂载为 `/apollo` 或 `/apollo_workspace`，下列命令会自动兼容两者：
+
+   ```bash
+   cd /apollo_workspace 2>/dev/null || cd /apollo
+   ```
+
+4. 安装 Dreamview+ 插件。该脚本会创建缺失的 `~/.apollo` 目录，安装与当前 Apollo 版本匹配的插件；需要 Studio Connector 时，使用第二条命令并替换为实际安装包 URL：
+
+   ```bash
+   ./apollo.sh install_dv_plugins
+   ./apollo.sh install_dv_studio_plugins <studio-installer-url>
+   ```
+
+5. 编译 Dreamview+。日常验证建议先使用只编译命令；需要完整工程时再使用常规构建命令：
+
+   ```bash
+   buildtool build --cpu -p modules/dreamview_plus
+   # 或：./apollo.sh build_cpu dreamview_plus
+   ```
+
+6. 启动、访问和停止 Dreamview+：
+
+   ```bash
+   bash scripts/bootstrap.sh start_plus
+   # 宿主机浏览器访问 http://localhost:8888
+   bash scripts/bootstrap.sh stop_plus
+   ```
+
+7. 验收插件和场景资源。启动后在 Dreamview+ 中确认 **Scenario / Resource Manager / Simulator** 页面可见；下载场景集或地图资源后刷新页面，资源应可选择。Studio Connector 场景下还应确认日志中没有 `libstudio_connector_component.so` 加载失败。
+
+   ```bash
+   grep -R "libstudio_connector_component.so\|UpdateScenarioSetToStatus" \
+     /apollo/data/log 2>/dev/null || true
+   ```
+
+8. 运行模块测试：
+
+   ```bash
+   ./apollo.sh test dreamview_plus
+   ```
+
+   `apollo.sh test` 已额外检查 Buildtool/Bazel 的失败标记；即使某些 Buildtool 版本错误地返回退出码 `0`，脚本也会返回非零，避免测试“假绿”。
+
+### Dreamview+ 遇到的问题、影响和处理
+
+下表记录本版本验证和修复过程中遇到的全部 Dreamview+ 相关问题。前十项已在本分支处理；最后一项是当前基础测试镜像的已知环境阻塞，未伪装为测试通过。
+
+| 问题 | 现象 / 根因 | v0.01 处理与验证 |
+| --- | --- | --- |
+| 缺少 `~/.apollo` | 插件安装前目录不存在，安装或运行脚本失败。 | 安装脚本创建所需目录；按上述第 4 步安装。 |
+| 插件版本或 ABI 不匹配 | 组件加载时出现 `absl`、仿真库或其他动态库符号/依赖错误。 | 按 Apollo 版本选择插件，安装脚本支持显式版本；不要混用不同发行版插件。 |
+| 旧 Studio Connector 指向用户目录库 | `mainboard` 可能加载 `$HOME/.apollo/dreamview/plugins/studio_connector/libstudio_connector_component.so` 并失败。 | Connector 配置脚本将 DAG 指向随 Apollo 安装的兼容库，并兼容 `/apollo` 与 `/apollo_workspace`。 |
+| Studio Connector 重复启动或启动时序不稳定 | Connector 已在运行时再次拉起，或 Dreamview 未等待组件就绪。 | 启动逻辑先检查已运行的 Connector，并在继续前确认状态。 |
+| 已下载场景集未出现在界面 | 场景集状态更新未触发，或启动扫描遗漏已有资源。 | 恢复场景集状态回调和启动扫描；下载后刷新 Scenario 页面验证。 |
+| 压缩地图资源未刷新 | `.zip` 地图资源未被识别，资源管理器不更新。 | 保留 `.zip` / `.tar.xz` 合法资源更新路径，并在启动时解析正确的地图资源根目录。 |
+| Simulator 场景入口缺失 | 插件资源分发或入口注册不完整，Simulator 页面没有对应场景。 | 同步 Studio 资源并恢复 Dreamview+ 场景入口；按第 7 步检查 Simulator 页面。 |
+| 插件回调携带错误 JSON | 缺少字段或字段类型错误时可能抛出异常，影响 Dreamview 后端。 | 回调统一验证 `data`、字符串字段和非空模型名，拒绝无效消息并记录错误。 |
+| 场景集 ID 可造成路径穿越 | 恶意或异常 ID 可突破期望的场景资源目录。 | 仅允许字母、数字、`_`、`-`；加载和更新路径均执行校验。 |
+| 部分挂载/网络文件系统漏扫场景集 | `dirent.d_type` 可为 `DT_UNKNOWN`，旧逻辑把有效目录跳过。 | 不再依赖 `d_type`；通过安全 ID 和元数据解析确认有效场景集。 |
+| 测试命令“假绿” | 某些 Buildtool 版本在嵌套 Bazel 失败后仍返回 `0`。 | `scripts/apollo_action.sh` 对 `apollo.sh test` 检查失败标记并返回非零；已用成功和失败模拟输出验证。 |
+| 基础测试镜像链接依赖缺失（已知环境问题） | 在干净的 Apollo 10.0 官方测试镜像中，`simulation_world_service_test` 链接阶段找不到 `-lgflags`、`-lglog`、`-lproj`。 | `buildtool build --cpu -p modules/dreamview_plus` 已成功编译；完整测试需补齐镜像依赖/库搜索路径后重跑。这不是 Dreamview+ 源码编译失败。 |
+
+本版本涉及的 C++ 回调校验、场景路径防护和测试退出码判断均已补充注释，便于后续维护和问题追踪。
+
 ## Documents
 
 - [Installation Instructions](docs/01_Installation%20Instructions/)

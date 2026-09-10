@@ -276,6 +276,27 @@ function run_bazel_build() {
   [[ $ACTION == "test" ]] && job_args="" && CMDLINE_OPTIONS=""
   # Build result handling fixed on 2026-09-09 by Alanxu: the old trailing
   # conditional returned 1 after a successful build and made apollo.sh fail.
+  # Some buildtool releases return success even when their nested Bazel test
+  # command has already reported a build/test failure. Preserve the output and
+  # turn those explicit failure markers into a non-zero Apollo test result.
+  if [[ $ACTION == "test" ]]; then
+    local test_log
+    test_log="$(mktemp "${TMPDIR:-/tmp}/apollo-buildtool-test.XXXXXX")" || {
+      error "Unable to create a temporary buildtool test log."
+      return 1
+    }
+    buildtool $ACTION ${CMDLINE_OPTIONS} ${job_args} -p ${build_targets} ${ADDTIONAL_OPTIONS} \
+      2>&1 | tee "${test_log}"
+    local buildtool_status=${PIPESTATUS[0]}
+    if [[ ${buildtool_status} -ne 0 ]] ||
+      grep -Eq "FAILED: Build did NOT complete successfully|FAILED TO BUILD|[0-9]+ fails to build|[0-9]+ tests failed" "${test_log}"; then
+      rm -f -- "${test_log}"
+      error "Build or test failed!"
+      return 1
+    fi
+    rm -f -- "${test_log}"
+    return 0
+  fi
   if ! buildtool $ACTION ${CMDLINE_OPTIONS} ${job_args} -p ${build_targets} ${ADDTIONAL_OPTIONS}; then
     error "Build failed!"
     return 1
