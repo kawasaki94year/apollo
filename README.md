@@ -231,8 +231,13 @@ Congratulations! You have successfully built out Apollo without Hardware. If you
   - 检查 `buildtool` 和 `/etc/ld.so.conf.d/apollo.conf`；
   - 使用 `set -e` 和 `pipefail`，插件安装失败时立即退出，不再误报成功；
   - 安装 `3rd-tf2`、`3rd-civetweb`、`3rd-ad-rss-lib`、`studio-connector` 和 `sim-obstacle`。
+- `scripts/install_dv_studio_plugins.sh`
+  - 增加带参数的 Apollo Studio 临时安装脚本；
+  - 不在代码库中保存包含授权 token 的 URL；
+  - 将 Studio Connector 和 Sim Obstacle 安装到 `$HOME/.apollo/dreamview/plugins/`。
 - `apollo.sh`
-  - 命令检查器优先使用 `python3`，兼容没有 `python` 命令的 Ubuntu/Docker 环境。
+  - 命令检查器优先使用 `python3`，兼容没有 `python` 命令的 Ubuntu/Docker 环境；
+  - 增加 `install_dv_studio_plugins` 子命令。
 - `README.md`
   - 增加本节，说明修改内容、容器运行方式、插件安装、编译和 Dreamview 启动步骤。
 
@@ -276,6 +281,35 @@ cd /apollo_workspace  # 如果该目录不存在，则使用 cd /apollo
 安装成功后会显示 `Successfully install dreamview plugins.`。如果出现 `buildtool: command not found`，确认命令是在 Apollo 开发容器内执行，并检查容器网络是否可以访问 Apollo 包仓库。
 
 容器内普通用户如果没有 sudo 密码，脚本会优先使用已有的 `buildtool` 和可写的 Apollo 包目录，并跳过全局 `ldconfig`；如果容器中连 `buildtool` 也没有，则需要以 root 身份进入容器后重新执行安装。
+
+### 使用 Apollo Studio 临时安装包
+
+如果使用 Apollo Studio 生成的临时安装 URL，可以执行：
+
+```bash
+export APOLLO_STUDIO_INSTALL_URL='https://<Apollo-Studio-signed-installer-url>'
+./apollo.sh install_dv_studio_plugins "$APOLLO_STUDIO_INSTALL_URL"
+```
+
+也可以直接调用脚本：
+
+```bash
+./scripts/install_dv_studio_plugins.sh "$APOLLO_STUDIO_INSTALL_URL"
+```
+
+不要把真实的授权 URL 提交到 GitHub。该 URL 通常包含临时 token 和过期时间，应从 Apollo Studio 重新获取。安装成功后，插件位于：
+
+```text
+$HOME/.apollo/dreamview/plugins/studio_connector
+$HOME/.apollo/dreamview/plugins/sim_obstacle
+```
+
+安装完成后重启 Dreamview+：
+
+```bash
+bash scripts/bootstrap.sh stop
+bash scripts/bootstrap.sh start_plus
+```
 
 ### 编译 Apollo
 

@@ -13,7 +13,7 @@ USE_ESD_CAN=false
 : ${STAGE:=dev}
 
 AVAILABLE_COMMANDS="config build build_dbg build_opt build_cpu build_gpu build_opt_gpu test coverage lint \
-                    buildify check build_fe build_teleop build_prof doc clean format usage -h --help"
+                    buildify check build_fe build_teleop build_prof install_dv_studio_plugins doc clean format usage -h --help"
 
 function check_architecture_support() {
   if [[ "${SUPPORTED_ARCHS}" != *" ${ARCH} "* ]]; then
@@ -133,6 +133,7 @@ function _usage() {
     ${BLUE}build_teleop${NO_COLOR}: run build with teleop enabled.
     ${BLUE}build_prof [module]${NO_COLOR}: build with perf profiling support. Not implemented yet.
     ${BLUE}install_dv_plugins ${NO_COLOR}: install Dreamview plugins package.
+    ${BLUE}install_dv_studio_plugins <url>${NO_COLOR}: install Dreamview plugins from an Apollo Studio installer URL.
     ${BLUE}doc${NO_COLOR}: generate doxygen document
     ${BLUE}clean${NO_COLOR}: cleanup bazel output and log/coredump files
     ${BLUE}format${NO_COLOR}: format C++/Python/Bazel/Shell files
@@ -250,6 +251,9 @@ function main() {
       ;;
     install_dv_plugins)
       env ${APOLLO_ENV} bash "${TOP_DIR}/scripts/install_dv_plugins.sh"
+      ;;
+    install_dv_studio_plugins)
+      env ${APOLLO_ENV} bash "${TOP_DIR}/scripts/install_dv_studio_plugins.sh" "$@"
       ;;
     doc)
       env ${APOLLO_ENV} bash "${TOP_DIR}/scripts/apollo_docs.sh" "$@"
