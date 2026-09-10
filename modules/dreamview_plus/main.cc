@@ -15,6 +15,8 @@
  *****************************************************************************/
 
 #include <filesystem>
+#include <string>
+#include <vector>
 
 #include "gperftools/heap-profiler.h"
 #include "gperftools/malloc_extension.h"
@@ -22,7 +24,53 @@
 
 #include "cyber/common/global_data.h"
 #include "cyber/init.h"
+#include "modules/dreamview/backend/common/dreamview_gflags.h"
 #include "modules/dreamview_plus/backend/dreamview.h"
+
+namespace {
+
+void ResolveMapsDataPath() {
+  // maps_data_path is historically relative to the process working
+  // directory. In a development container, Dreamview+ may run from the
+  // mounted /apollo_workspace while Studio Connector stores maps under the
+  // installed Apollo root (/apollo). Resolve the path before HMI loads its
+  // initial map list.
+  if (FLAGS_maps_data_path.empty() ||
+      std::filesystem::path(FLAGS_maps_data_path).is_absolute()) {
+    return;
+  }
+
+  std::vector<std::filesystem::path> roots;
+  // Studio Connector uses the installed distribution root for downloaded
+  // maps, so prefer it when both the source and runtime trees are mounted.
+  const char* distribution_root = std::getenv("APOLLO_DISTRIBUTION_HOME");
+  if (distribution_root != nullptr && *distribution_root != '\0') {
+    roots.emplace_back(distribution_root);
+  }
+  const char* apollo_root = std::getenv("APOLLO_ROOT_DIR");
+  if (apollo_root != nullptr && *apollo_root != '\0') {
+    roots.emplace_back(apollo_root);
+  }
+  const char* runtime_root = std::getenv("APOLLO_RUNTIME_PATH");
+  if (runtime_root != nullptr && *runtime_root != '\0') {
+    roots.emplace_back(runtime_root);
+  }
+  // /apollo is the package root used by the Apollo development container.
+  if (std::filesystem::exists("/.dockerenv")) {
+    roots.emplace_back("/apollo");
+  }
+  roots.emplace_back(std::filesystem::current_path());
+
+  for (const auto& root : roots) {
+    const auto candidate = root / FLAGS_maps_data_path;
+    if (std::filesystem::is_directory(candidate)) {
+      FLAGS_maps_data_path = candidate.lexically_normal().string();
+      return;
+    }
+  }
+}
+
+}  // namespace
 
 int main(int argc, char* argv[]) {
   // set working directory to APOLLO_RUNTIME_PATH for relative file paths
@@ -34,6 +82,7 @@ int main(int argc, char* argv[]) {
     }
   }
   google::ParseCommandLineFlags(&argc, &argv, true);
+  ResolveMapsDataPath();
   // Added by caros to improve dv performance
 
   std::signal(SIGTERM, [](int sig) {
@@ -69,6 +118,7 @@ int main(int argc, char* argv[]) {
 
   apollo::cyber::GlobalData::Instance()->SetProcessGroup("dreamview_sched");
   apollo::cyber::Init(argv[0]);
+  AINFO << "Dreamview+ map data path: " << FLAGS_maps_data_path;
 
   apollo::dreamview::Dreamview dreamview;
   const bool init_success = dreamview.Init().ok() && dreamview.Start().ok();

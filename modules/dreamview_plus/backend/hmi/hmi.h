@@ -46,6 +46,9 @@ class HMI : public UpdaterBase {
   void Stop();
   void StopStream(const std::string &channel_name = "") override;
   void OnTimer(const std::string &channel_name = "");
+  // Refresh one scenario set after Apollo Studio finishes downloading it.
+  bool UpdateScenarioSetToStatus(const std::string &scenario_set_id,
+                                 const std::string &scenario_set_name);
   bool UpdateDynamicModelToStatus(const std::string &dynamic_model_name);
   bool UpdateMapToStatus(const std::string &map_name = "");
   bool UpdateRecordToStatus();

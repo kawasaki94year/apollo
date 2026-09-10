@@ -251,6 +251,80 @@ Congratulations! You have successfully built out Apollo without Hardware. If you
 - `README.md`
   - 增加本节，说明修改内容、容器运行方式、插件安装、编译和 Dreamview 启动步骤。
 
+### Dreamview+ 资源同步修复
+
+现象是 Apollo Studio 已经把场景、高精地图和其他资源下载到本地，但
+Dreamview+ 的 HMI 状态没有更新，因此网页看不到新资源。日志中的
+`Failed to update data!` 是插件回调失败的结果，不是下载失败。
+
+本次同步修复涉及以下文件：
+
+- `modules/dreamview_plus/backend/dreamview.cc`
+  - 注册并处理 `UpdateScenarioSetToStatus` 插件回调；
+  - 修正地图回调对 `data` 字段的检查，避免收到回调时访问不存在的字段。
+- `modules/dreamview_plus/backend/hmi/hmi.h` 和 `hmi.cc`
+  - 增加场景集更新接口，把插件回调转发到 HMI worker。
+- `modules/dreamview_plus/backend/hmi/hmi_worker.h` 和 `hmi_worker.cc`
+  - 读取 `$HOME/.apollo/resources/scenario_sets/<scenario_set_id>/` 下的
+    `scenario_set.json` 和场景 JSON，并更新 `HMIStatus`；
+  - Dreamview+ 启动时加载已经存在的场景集，重启后资源不会消失；
+  - 地图资源同时支持 `.tar.xz` 和 Apollo Studio Connector 使用的 `.zip` 文件。
+- `modules/dreamview_plus/main.cc`
+  - 在 HMI 初始化前解析地图目录，优先使用 Studio Connector 实际写入的
+    `APOLLO_DISTRIBUTION_HOME/modules/map/data`。
+- `scripts/bootstrap.sh`
+  - 当源码挂载目录是 `/apollo_workspace`、运行时包目录是 `/apollo` 时，
+    `start_plus` 也能找到并启动 Studio Connector。
+- `scripts/configure_dv_studio_connector.sh`
+  - 对只有账号证书、没有用户 DAG 的新安装器输出使用系统 Connector DAG；
+  - 将插件元数据中的相对启动命令改为带正确工作目录的命令，避免重复启动或登录失败。
+
+### 从源码运行和验证
+
+下面命令应在 Apollo 开发容器内执行。若容器同时存在 `/apollo` 和
+`/apollo_workspace`，源码一般在 `/apollo_workspace`，运行时插件包在
+`/apollo`；保留或显式设置 `APOLLO_ROOT_DIR=/apollo`，可以避免脚本使用错误的
+相对路径：
+
+```bash
+cd /apollo_workspace
+export APOLLO_ROOT_DIR=/apollo
+
+# 安装与当前 Apollo 运行库匹配的 Dreamview 插件
+./apollo.sh install_dv_plugins
+
+# 如果还没有 Apollo Studio 账号证书，使用 Studio 提供的一次性安装 URL
+export APOLLO_STUDIO_INSTALL_URL='https://<Apollo-Studio-signed-installer-url>'
+./apollo.sh install_dv_studio_plugins "$APOLLO_STUDIO_INSTALL_URL"
+
+# 编译本次修改的 Dreamview+
+buildtool build -p modules/dreamview_plus
+
+# 重启 Dreamview+ 和 Studio Connector
+bash scripts/bootstrap.sh restart_plus
+```
+
+浏览器打开 `http://localhost:8888`。下载资源后可检查：
+
+```bash
+# 场景集
+find "$HOME/.apollo/resources/scenario_sets" -maxdepth 3 -type f
+
+# 地图（默认地图目录）
+find /apollo/modules/map/data -maxdepth 2 -type d
+
+# Connector 是否运行
+pgrep -af 'mainboard.*studio_connector.dag'
+
+# Dreamview+ 是否仍报告插件回调失败；正常情况下不应出现新记录
+grep -E 'Failed to update data|Failed to handle msg' \
+  /apollo/data/log/dreamview_plus.INFO
+```
+
+如果使用的是单独的 `/apollo` 源码目录，将上面的 `cd /apollo_workspace` 改为
+`cd /apollo`，并不需要设置 `APOLLO_ROOT_DIR`。安装脚本生成的授权 URL 含有临时
+token，不能提交到 GitHub。
+
 ### 环境要求
 
 - Ubuntu 18.04、20.04 或 22.04；

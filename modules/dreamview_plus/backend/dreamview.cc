@@ -24,6 +24,7 @@
 #include "modules/dreamview/backend/common/dreamview_gflags.h"
 namespace {
 std::map<std::string, int> plugin_function_map = {
+    {"UpdateScenarioSetToStatus", 0},
     {"UpdateRecordToStatus", 1},
     {"UpdateDynamicModelToStatus", 2},
     {"UpdateVehicleToStatus", 3},
@@ -215,12 +216,26 @@ nlohmann::json Dreamview::HMICallbackOtherService(
 
 bool Dreamview::PluginCallbackHMI(const std::string& function_name,
                                   const nlohmann::json& param_json) {
-  bool callback_res;
+  bool callback_res = false;
   if (plugin_function_map.find(function_name) == plugin_function_map.end()) {
     AERROR << "Donnot support this callback";
     return false;
   }
   switch (plugin_function_map[function_name]) {
+    case 0: {
+      // Apollo Studio sends the scenario-set id/name after the files are
+      // downloaded. Rebuild the local HMIStatus entry from those files.
+      if (param_json.contains("data") &&
+          param_json["data"].contains("scenario_set_id") &&
+          param_json["data"].contains("scenario_set_name")) {
+        const std::string scenario_set_id =
+            param_json["data"]["scenario_set_id"];
+        const std::string scenario_set_name =
+            param_json["data"]["scenario_set_name"];
+        callback_res = hmi_->UpdateScenarioSetToStatus(scenario_set_id,
+                                                       scenario_set_name);
+      }
+    } break;
     case 1: {
       callback_res = hmi_->UpdateRecordToStatus();
     } break;
@@ -237,7 +252,7 @@ bool Dreamview::PluginCallbackHMI(const std::string& function_name,
       callback_res = hmi_->UpdateVehicleToStatus();
     } break;
     case 4: {
-      if (param_json["data"].contains("resource_id") &&
+      if (param_json.contains("data") &&
           param_json["data"].contains("resource_id")) {
         const std::string map_name = param_json["data"]["resource_id"];
         callback_res = hmi_->UpdateMapToStatus(map_name);

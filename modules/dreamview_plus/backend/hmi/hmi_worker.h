@@ -99,6 +99,12 @@ class HMIWorker {
   // Get current HMI status.
   HMIStatus GetStatus() const;
 
+  // Rebuild a downloaded scenario set and publish it through HMIStatus.
+  bool UpdateScenarioSetToStatus(const std::string &scenario_set_id,
+                                 const std::string &scenario_set_name);
+  bool UpdateScenarioSet(const std::string &scenario_set_id,
+                         const std::string &scenario_set_name,
+                         ScenarioSet *new_scenario_set);
   bool UpdateDynamicModelToStatus(const std::string& dynamic_model_name);
   void UpdateComponentStatus();
   // bool UpdateRecordToStatus(const std::string& record_id,
@@ -126,8 +132,8 @@ class HMIWorker {
    */
   bool ResetRecordProgress(const double& progress);
   bool ReloadVehicles();
-  void GetScenarioSetPath(const std::string& scenario_set_id,
-                          std::string* scenario_set_path);
+  bool GetScenarioSetPath(const std::string &scenario_set_id,
+                          std::string *scenario_set_path);
   void UpdateCameraSensorChannelToStatus(const std::string& channel_name);
   void UpdatePointCloudChannelToStatus(const std::string& channel_name);
 
@@ -209,6 +215,8 @@ class HMIWorker {
 
 
   bool LoadDynamicModels();
+  // Load scenario sets that already exist before Dreamview+ starts.
+  bool LoadScenarios();
   void DeleteMap(const std::string& map_name);
   void DeleteScenarioSet(const std::string& scenario_set_id);
   void DeleteRecord(const std::string& record_id);

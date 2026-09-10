@@ -818,6 +818,12 @@ void HMI::PublishMessage(const std::string& channel_name) {
   hmi_ws_->BroadcastBinaryData(response_str);
 }
 
+bool HMI::UpdateScenarioSetToStatus(const std::string &scenario_set_id,
+                                    const std::string &scenario_set_name) {
+  return hmi_worker_->UpdateScenarioSetToStatus(scenario_set_id,
+                                                scenario_set_name);
+}
+
 bool HMI::UpdateDynamicModelToStatus(const std::string& dynamic_model_name) {
   return hmi_worker_->UpdateDynamicModelToStatus(dynamic_model_name);
 }

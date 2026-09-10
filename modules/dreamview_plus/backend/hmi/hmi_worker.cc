@@ -16,7 +16,9 @@
 
 #include "modules/dreamview_plus/backend/hmi/hmi_worker.h"
 
+#include <dirent.h>
 #include <cstdio>
+#include <cstring>
 #include <utility>
 
 #include "absl/strings/str_cat.h"
@@ -196,6 +198,12 @@ void HMIWorker::InitStatus() {
   // Populate vehicles and current_vehicle.
   for (const auto &vehicle : config_.vehicles()) {
     status_.add_vehicles(vehicle.first);
+  }
+
+  // The Studio connector stores scenario sets under $HOME/.apollo. Load
+  // them during startup so a restart does not hide already downloaded data.
+  if (!LoadScenarios()) {
+    AWARN << "Failed to load local scenario sets during startup.";
   }
 
   // Initial HMIMode by priority:
@@ -856,6 +864,16 @@ bool HMIWorker::GetScenarioResourcePath(std::string *scenario_resource_path) {
   return true;
 }
 
+bool HMIWorker::GetScenarioSetPath(const std::string &scenario_set_id,
+                                   std::string *scenario_set_path) {
+  CHECK_NOTNULL(scenario_set_path);
+  if (!GetScenarioResourcePath(scenario_set_path)) {
+    return false;
+  }
+  *scenario_set_path += scenario_set_id;
+  return true;
+}
+
 void HMIWorker::ChangeDynamicModel(const std::string &dynamic_model_name) {
   // To avoid toggle sim control and always choose simulation perfect control
   // {
@@ -890,6 +908,183 @@ void HMIWorker::ChangeDynamicModel(const std::string &dynamic_model_name) {
     status_changed_ = true;
   }
   return;
+}
+
+bool HMIWorker::UpdateScenarioSetToStatus(
+    const std::string &scenario_set_id, const std::string &scenario_set_name) {
+  if (scenario_set_id.empty() || scenario_set_name.empty()) {
+    AERROR << "Scenario set id and name must not be empty.";
+    return false;
+  }
+  // The ID is used as a directory name. Reject path-like values received from
+  // the plugin before constructing a local resource path.
+  if (scenario_set_id.find('/') != std::string::npos ||
+      scenario_set_id.find("..") != std::string::npos ||
+      scenario_set_id.find(' ') != std::string::npos ||
+      scenario_set_id.find('~') != std::string::npos) {
+    AERROR << "Invalid scenario set id: " << scenario_set_id;
+    return false;
+  }
+
+  ScenarioSet new_scenario_set;
+  if (!UpdateScenarioSet(scenario_set_id, scenario_set_name,
+                         &new_scenario_set)) {
+    AERROR << "Failed to update scenario set " << scenario_set_id;
+    return false;
+  }
+
+  {
+    WLock wlock(status_mutex_);
+    // Replace the entry because a re-download can add or remove scenarios.
+    auto *scenario_sets = status_.mutable_scenario_set();
+    (*scenario_sets)[scenario_set_id] = std::move(new_scenario_set);
+    status_changed_ = true;
+  }
+  return true;
+}
+
+bool HMIWorker::UpdateScenarioSet(const std::string &scenario_set_id,
+                                  const std::string &scenario_set_name,
+                                  ScenarioSet *new_scenario_set) {
+  CHECK_NOTNULL(new_scenario_set);
+  std::string scenario_set_directory_path;
+  if (!GetScenarioSetPath(scenario_set_id, &scenario_set_directory_path)) {
+    AERROR << "Cannot get scenario set path for " << scenario_set_id;
+    return false;
+  }
+  scenario_set_directory_path += "/scenarios/";
+  new_scenario_set->set_scenario_set_name(scenario_set_name);
+  if (!cyber::common::PathExists(scenario_set_directory_path)) {
+    AERROR << "Scenario set has no scenarios: " << scenario_set_directory_path;
+    return true;
+  }
+
+  DIR *directory = opendir(scenario_set_directory_path.c_str());
+  if (directory == nullptr) {
+    AERROR << "Cannot open directory " << scenario_set_directory_path;
+    return false;
+  }
+
+  struct dirent *file;
+  while ((file = readdir(directory)) != nullptr) {
+    if (!strcmp(file->d_name, ".") || !strcmp(file->d_name, "..")) {
+      continue;
+    }
+    const std::string file_name = file->d_name;
+    if (!absl::EndsWith(file_name, ".json")) {
+      continue;
+    }
+    const size_t suffix_index = file_name.rfind(".json");
+    if (suffix_index == 0) {
+      continue;
+    }
+
+    const std::string scenario_id = file_name.substr(0, suffix_index);
+    const std::string file_path = scenario_set_directory_path + file_name;
+    SimTicket sim_ticket;
+    if (!cyber::common::GetProtoFromJsonFile(file_path, &sim_ticket) ||
+        !sim_ticket.has_scenario()) {
+      AERROR << "Cannot parse scenario: " << file_path;
+      closedir(directory);
+      return false;
+    }
+    if (!sim_ticket.description_en_tokens_size() ||
+        !sim_ticket.scenario().has_map_dir() ||
+        !sim_ticket.scenario().has_start()) {
+      AERROR << "Scenario metadata is incomplete: " << file_path;
+      closedir(directory);
+      return false;
+    }
+
+    const auto &start = sim_ticket.scenario().start();
+    if (!start.has_x() || !start.has_y()) {
+      AERROR << "Scenario start point is invalid: " << file_path;
+      closedir(directory);
+      return false;
+    }
+
+    std::string scenario_name = sim_ticket.description_en_tokens(0);
+    for (int i = 1; i < sim_ticket.description_en_tokens_size(); ++i) {
+      scenario_name += "_" + sim_ticket.description_en_tokens(i);
+    }
+
+    const std::string map_dir = sim_ticket.scenario().map_dir();
+    const size_t map_separator = map_dir.find_last_of('/');
+    if (map_separator == std::string::npos ||
+        map_separator + 1 >= map_dir.size()) {
+      AERROR << "Cannot get scenario map name: " << file_path;
+      closedir(directory);
+      return false;
+    }
+
+    ScenarioInfo *scenario_info = new_scenario_set->add_scenarios();
+    scenario_info->set_scenario_id(scenario_id);
+    scenario_info->set_scenario_name(scenario_name);
+    scenario_info->set_map_name(
+        util::HMIUtil::TitleCase(map_dir.substr(map_separator + 1)));
+    scenario_info->mutable_start_point()->set_x(start.x());
+    scenario_info->mutable_start_point()->set_y(start.y());
+  }
+  closedir(directory);
+  return true;
+}
+
+bool HMIWorker::LoadScenarios() {
+  std::string directory_path;
+  if (!GetScenarioResourcePath(&directory_path)) {
+    AERROR << "Failed to get scenario resource path.";
+    return false;
+  }
+  if (!cyber::common::PathExists(directory_path)) {
+    AWARN << "Scenario resource directory does not exist: " << directory_path;
+    return true;
+  }
+
+  DIR *directory = opendir(directory_path.c_str());
+  if (directory == nullptr) {
+    AERROR << "Cannot open scenario resource directory " << directory_path;
+    return false;
+  }
+
+  std::map<std::string, ScenarioSet> scenario_sets;
+  struct dirent *file;
+  while ((file = readdir(directory)) != nullptr) {
+    if (!strcmp(file->d_name, ".") || !strcmp(file->d_name, "..") ||
+        file->d_type != DT_DIR) {
+      continue;
+    }
+
+    const std::string scenario_set_id = file->d_name;
+    const std::string scenario_set_json_path =
+        directory_path + scenario_set_id + "/scenario_set.json";
+    UserAdsGroup user_ads_group_info;
+    if (!cyber::common::GetProtoFromJsonFile(scenario_set_json_path,
+                                             &user_ads_group_info) ||
+        !user_ads_group_info.has_name()) {
+      AWARN << "Skip invalid scenario set metadata: "
+            << scenario_set_json_path;
+      continue;
+    }
+
+    ScenarioSet scenario_set;
+    if (UpdateScenarioSet(scenario_set_id, user_ads_group_info.name(),
+                          &scenario_set)) {
+      scenario_sets[scenario_set_id] = std::move(scenario_set);
+    }
+  }
+  closedir(directory);
+
+  {
+    WLock wlock(status_mutex_);
+    auto *status_scenario_sets = status_.mutable_scenario_set();
+    status_scenario_sets->clear();
+    for (auto &scenario_set : scenario_sets) {
+      (*status_scenario_sets)[scenario_set.first] =
+          std::move(scenario_set.second);
+    }
+    status_changed_ = true;
+  }
+  return true;
 }
 
 bool HMIWorker::UpdateDynamicModelToStatus(
@@ -1362,16 +1557,23 @@ bool HMIWorker::UpdateMapToStatus(const std::string &map_tar_name) {
   }
   std::string map_dir = FLAGS_maps_data_path + "/";
   std::string map_name_prefix;
-  int index = map_tar_name.rfind(".tar.xz");
-  if (index != -1 && map_tar_name[0] != '.') {
-    map_name_prefix = map_tar_name.substr(0, index);
+  // Apollo Studio can deliver either the legacy .tar.xz package or the
+  // connector's .zip package. Both are unpacked into the map data directory.
+  if (map_tar_name[0] != '.' &&
+      (absl::EndsWith(map_tar_name, ".tar.xz") ||
+       absl::EndsWith(map_tar_name, ".zip"))) {
+    const size_t suffix_index = map_tar_name.rfind('.');
+    map_name_prefix = map_tar_name.substr(0, suffix_index);
+    if (absl::EndsWith(map_name_prefix, ".tar")) {
+      map_name_prefix.resize(map_name_prefix.size() - 4);
+    }
     map_dir = map_dir + map_name_prefix;
   } else {
     AERROR << "The map name does not meet the standard!" << map_tar_name;
     return false;
   }
   if (!cyber::common::PathExists(map_dir)) {
-    AERROR << "Failed to find maps!";
+    AERROR << "Failed to find maps at: " << map_dir;
     return false;
   }
   map_name_prefix = util::HMIUtil::TitleCase(map_name_prefix);
