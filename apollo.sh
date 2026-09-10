@@ -146,7 +146,18 @@ function _check_command() {
   local help_msg="Run './apollo.sh --help' for usage."
   local cmd="$@"
 
-  python scripts/command_checker.py --name "${name}" --command "${cmd}" --available "${commands}" --helpmsg "${help_msg}"
+  # Ubuntu/Docker 镜像可能只有 python3，优先使用它运行命令检查器。
+  local python_cmd=""
+  if command -v python3 >/dev/null 2>&1; then
+    python_cmd="python3"
+  elif command -v python >/dev/null 2>&1; then
+    python_cmd="python"
+  else
+    error "Neither python3 nor python was found; command validation cannot continue."
+    return 127
+  fi
+
+  "${python_cmd}" scripts/command_checker.py --name "${name}" --command "${cmd}" --available "${commands}" --helpmsg "${help_msg}"
 }
 
 function check_config_cpu() {

@@ -28,6 +28,7 @@ For business and partnership, please visit [our website](http://apollo.auto).
 5. [Installation](#installation)
 6. [Quick Starts](#quick-starts)
 7. [Documents](#documents)
+8. [Dreamview Plugin Fix and Runbook](#dreamview-plugin-fix-and-runbook)
 
 ## Introduction
 
@@ -216,6 +217,119 @@ Congratulations! You have successfully built out Apollo without Hardware. If you
 - [Apollo 1.5 QuickStart Guide](docs/02_Quick%20Start/apollo_1_5_quick_start.md)
 
 - [Apollo 1.0 QuickStart Guide](docs/02_Quick%20Start/apollo_1_0_quick_start.md)
+
+## Dreamview Plugin Fix and Runbook
+
+本节记录本次 Dreamview 插件安装问题的修复内容，以及从启动容器到运行 Apollo 的完整步骤。
+
+### 本次修改的文件
+
+- `scripts/install_dv_plugins.sh`
+  - 增加 root/sudo 权限预检查；
+  - 恢复 `apollo-neo-buildtool` 的自动安装流程；
+  - 自动创建 `${HOME}/.apollo`，避免 `available_check` 文件创建失败；
+  - 检查 `buildtool` 和 `/etc/ld.so.conf.d/apollo.conf`；
+  - 使用 `set -e` 和 `pipefail`，插件安装失败时立即退出，不再误报成功；
+  - 安装 `3rd-tf2`、`3rd-civetweb`、`3rd-ad-rss-lib`、`studio-connector` 和 `sim-obstacle`。
+- `apollo.sh`
+  - 命令检查器优先使用 `python3`，兼容没有 `python` 命令的 Ubuntu/Docker 环境。
+- `README.md`
+  - 增加本节，说明修改内容、容器运行方式、插件安装、编译和 Dreamview 启动步骤。
+
+### 环境要求
+
+- Ubuntu 18.04、20.04 或 22.04；
+- Docker 19.03 或更高版本；
+- 使用 GPU 功能时安装 NVIDIA 驱动和 NVIDIA Container Toolkit；
+- 能够访问 Apollo 包仓库，用于下载 `apollo-neo-buildtool` 和 Dreamview 插件包。
+
+### 启动 Apollo 开发容器
+
+在 Apollo 项目根目录执行：
+
+```bash
+bash docker/scripts/dev_start.sh
+bash docker/scripts/dev_into.sh
+```
+
+进入容器后，先确认当前目录是 Apollo 源码目录。不同启动方式可能使用 `/apollo` 或 `/apollo_workspace`：
+
+```bash
+pwd
+cd /apollo_workspace  # 如果该目录不存在，则使用 cd /apollo
+```
+
+### 安装 Dreamview 插件
+
+必须使用 `install_dv_plugins` 子命令，不能把脚本路径作为参数：
+
+```bash
+./apollo.sh install_dv_plugins
+```
+
+不要使用下面的错误写法：
+
+```bash
+./apollo.sh scripts/install_dv_plugins.sh
+```
+
+安装成功后会显示 `Successfully install dreamview plugins.`。如果出现 `buildtool: command not found`，确认命令是在 Apollo 开发容器内执行，并检查容器网络是否可以访问 Apollo 包仓库。
+
+### 编译 Apollo
+
+在容器内的 Apollo 源码目录执行：
+
+```bash
+# 普通编译
+./apollo.sh build
+
+# 优化编译
+./apollo.sh build_opt
+```
+
+也可以只编译指定模块，例如：
+
+```bash
+./apollo.sh build dreamview
+```
+
+### 启动 Dreamview+
+
+插件安装或代码编译完成后，启动 Dreamview+：
+
+```bash
+bash scripts/bootstrap.sh start_plus
+```
+
+然后在宿主机浏览器打开：
+
+```text
+http://localhost:8888
+```
+
+如果需要启动普通 Dreamview，可以执行：
+
+```bash
+bash scripts/bootstrap.sh start
+```
+
+### 播放示例数据包
+
+在容器内下载示例数据包：
+
+```bash
+mkdir -p "$HOME/.apollo/resources/records"
+wget https://apollo-system.cdn.bcebos.com/dataset/6.0_edu/demo_3.5.record \
+  -P "$HOME/.apollo/resources/records/"
+```
+
+启动 Dreamview+ 后，可以在界面中选择数据包播放；也可以使用命令行循环播放：
+
+```bash
+cyber_recorder play -f "$HOME/.apollo/resources/records/demo_3.5.record" -l
+```
+
+插件安装完成后需要重启 Dreamview，使新插件生效。
 
 ## Documents
 
