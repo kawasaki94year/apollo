@@ -27,6 +27,65 @@ ulimit -c unlimited
 
 source "${DIR}/apollo_base.sh"
 
+function studio_connector_launch_file() {
+  local user_launch="${HOME}/.apollo/dreamview/plugins/studio_connector/studio_connector.launch"
+  if [[ -f "${user_launch}" ]]; then
+    echo "${user_launch}"
+    return 0
+  fi
+  local package_launch="${APOLLO_ROOT_DIR}/modules/studio_connector/studio_connector.launch"
+  if [[ -f "${package_launch}" ]]; then
+    echo "${package_launch}"
+    return 0
+  fi
+  return 1
+}
+
+function start_studio_connector() {
+  local launch_file
+  launch_file="$(studio_connector_launch_file || true)"
+  if [[ -z "${launch_file}" ]]; then
+    echo "Studio Connector is not installed; skipping plugin startup."
+    return 0
+  fi
+
+  # Repair old Studio installer output while preserving account certificates.
+  if [[ -x "${DIR}/configure_dv_studio_connector.sh" ]]; then
+    bash "${DIR}/configure_dv_studio_connector.sh" || return 1
+  fi
+
+  if pgrep -f "cyber_launch start ${launch_file}" >/dev/null 2>&1 ||
+    pgrep -f "mainboard.*studio_connector.dag" >/dev/null 2>&1; then
+    echo "Studio Connector is already running."
+    return 0
+  fi
+
+  echo "Starting Studio Connector ${launch_file}"
+  # Package launch files use paths relative to APOLLO_ROOT_DIR.
+  (
+    cd "${APOLLO_ROOT_DIR}" || exit 1
+    nohup cyber_launch start "${launch_file}" \
+      >"${APOLLO_ROOT_DIR}/data/log/studio_connector.launch.out" 2>&1
+  ) &
+  sleep 2
+  if ! pgrep -f "mainboard.*studio_connector.dag" >/dev/null 2>&1; then
+    echo "Failed to start Studio Connector. Check ${APOLLO_ROOT_DIR}/data/log/studio_connector.launch.out" >&2
+    return 1
+  fi
+}
+
+function stop_studio_connector() {
+  local launch_file
+  launch_file="$(studio_connector_launch_file || true)"
+  if [[ -z "${launch_file}" ]]; then
+    return 0
+  fi
+  if pgrep -f "mainboard.*studio_connector.dag" >/dev/null 2>&1; then
+    echo "Stopping Studio Connector"
+    cyber_launch stop "${launch_file}" || true
+  fi
+}
+
 function start() {
   for mod in ${APOLLO_BOOTSTRAP_EXTRA_MODULES}; do
     echo "Starting ${mod}"
@@ -62,6 +121,7 @@ function start_plus() {
   done
   ./scripts/monitor.sh start
   ./scripts/dreamview_plus.sh start
+  start_studio_connector
   if [ $? -eq 0 ]; then
     sleep 2 # wait for some time before starting to check
     http_status="$(curl -o /dev/null -x '' -I -L -s -w '%{http_code}' ${DREAMVIEW_PLUS_URL})"
@@ -74,6 +134,7 @@ function start_plus() {
 }
 
 function stop_plus() {
+  stop_studio_connector
   ./scripts/dreamview_plus.sh stop
   ./scripts/monitor.sh stop
   for mod in ${APOLLO_BOOTSTRAP_EXTRA_MODULES}; do

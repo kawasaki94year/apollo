@@ -230,11 +230,21 @@ Congratulations! You have successfully built out Apollo without Hardware. If you
   - 自动创建 `${HOME}/.apollo`，避免 `available_check` 文件创建失败；
   - 检查 `buildtool` 和 `/etc/ld.so.conf.d/apollo.conf`；
   - 使用 `set -e` 和 `pipefail`，插件安装失败时立即退出，不再误报成功；
-  - 安装 `3rd-tf2`、`3rd-civetweb`、`3rd-ad-rss-lib`、`studio-connector` 和 `sim-obstacle`。
+  - 根据 Apollo buildtool 版本匹配安装 `simulator-plugin`、`studio-connector` 和 `sim-obstacle`，避免 9.x/10.x 二进制混用；
+  - 安装 `3rd-tf2`、`3rd-civetweb` 和 `3rd-ad-rss-lib`。
+- `scripts/dv_plugin_runtime.sh`
+  - 统一解析与 Apollo 运行库匹配的插件版本和组件库路径。
+- `scripts/configure_dv_studio_connector.sh`
+  - 保留 Apollo Studio 安装器生成的账号证书；
+  - 将 Connector DAG 切换到版本匹配的 Apollo 组件，避免插件自带旧版 `.so` 导致启动崩溃。
+- `scripts/bootstrap.sh`
+  - `start_plus` 自动启动 Studio Connector；
+  - `stop_plus` 同步停止 Connector，并检查进程是否真正存活。
 - `scripts/install_dv_studio_plugins.sh`
   - 增加带参数的 Apollo Studio 临时安装脚本；
   - 不在代码库中保存包含授权 token 的 URL；
-  - 将 Studio Connector 和 Sim Obstacle 安装到 `$HOME/.apollo/dreamview/plugins/`。
+  - 将 Studio Connector 和 Sim Obstacle 安装到 `$HOME/.apollo/dreamview/plugins/`；
+  - 安装与当前 Apollo 运行库匹配的 native runtime，并自动修复 Connector DAG。
 - `apollo.sh`
   - 命令检查器优先使用 `python3`，兼容没有 `python` 命令的 Ubuntu/Docker 环境；
   - 增加 `install_dv_studio_plugins` 子命令。
@@ -304,12 +314,28 @@ $HOME/.apollo/dreamview/plugins/studio_connector
 $HOME/.apollo/dreamview/plugins/sim_obstacle
 ```
 
-安装完成后重启 Dreamview+：
+安装完成后重启 Dreamview+（现在 `start_plus` 会自动启动 Connector）：
 
 ```bash
 bash scripts/bootstrap.sh stop
 bash scripts/bootstrap.sh start_plus
 ```
+
+如果 buildtool 版本无法自动识别，可显式指定插件版本：
+
+```bash
+export APOLLO_STUDIO_PLUGIN_VERSION=10.0.0
+./apollo.sh install_dv_plugins
+```
+
+检查 Connector 是否正常运行：
+
+```bash
+pgrep -af 'mainboard.*studio_connector.dag'
+tail -f /apollo/data/log/studio_connector.launch.out
+```
+
+如果日志出现 `libabsl_*`、`lib_sim_*_mdsp_bin.so` 或 `libfastrtps` 缺失，说明插件版本与 Apollo 运行库不一致，应重新执行上面的版本匹配安装命令，不要直接运行 `$HOME/.apollo/dreamview/plugins/studio_connector/libstudio_connector_component.so`。
 
 ### 编译 Apollo
 

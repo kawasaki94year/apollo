@@ -9,6 +9,10 @@
 
 set -euo pipefail
 
+TOP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+# shellcheck disable=SC1091
+source "${TOP_DIR}/scripts/dv_plugin_runtime.sh"
+
 if [[ $# -ne 1 ]]; then
   echo "Usage: $0 <Apollo Studio installer URL>" >&2
   exit 2
@@ -36,3 +40,21 @@ chmod 700 "${INSTALL_SCRIPT}"
 
 # 安装包会把 studio_connector 和 sim_obstacle 放入 $HOME/.apollo/dreamview/plugins。
 bash "${INSTALL_SCRIPT}"
+
+# The signed installer supplies credentials and plugin metadata. The native
+# component must come from the version-matched Apollo package.
+# Otherwise the connector exits before Dreamview+ can authenticate or sync scenarios.
+if ! command -v buildtool >/dev/null 2>&1; then
+  echo "Error: buildtool is required to install the version-matched connector runtime." >&2
+  exit 1
+fi
+
+PLUGIN_VERSION="$(apollo_dv_plugin_version || true)"
+if [[ -z "${PLUGIN_VERSION}" ]]; then
+  echo "Error: cannot determine the Apollo runtime version. Set APOLLO_STUDIO_PLUGIN_VERSION explicitly." >&2
+  exit 1
+fi
+
+buildtool reinstall "simulator-plugin=${PLUGIN_VERSION}"
+buildtool reinstall "studio-connector=${PLUGIN_VERSION}"
+bash "${TOP_DIR}/scripts/configure_dv_studio_connector.sh"

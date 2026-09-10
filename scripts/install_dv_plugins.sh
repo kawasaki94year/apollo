@@ -18,6 +18,8 @@
 
 TOP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 source "${TOP_DIR}/scripts/apollo_base.sh"
+# shellcheck disable=SC1091
+source "${TOP_DIR}/scripts/dv_plugin_runtime.sh"
 
 set -e
 set -o pipefail
@@ -104,10 +106,25 @@ else
   warning "Skipping system-wide library configuration; run ldconfig as root if the container does not provide Apollo library paths."
 fi
 
+PLUGIN_VERSION="$(apollo_dv_plugin_version || true)"
+if [[ -z "${PLUGIN_VERSION}" ]]; then
+  error "Cannot determine the Apollo runtime version for Dreamview plugins. Set APOLLO_STUDIO_PLUGIN_VERSION explicitly."
+  exit 1
+fi
+info "Using version-matched Dreamview plugin packages: ${PLUGIN_VERSION}"
+
 # 逐个重新安装 Dreamview 依赖插件；任何一个包失败都立即终止，避免误报成功。
 buildtool reinstall 3rd-tf2 3rd-civetweb 3rd-ad-rss-lib
-buildtool reinstall studio-connector
-buildtool reinstall sim-obstacle
+# studio-connector depends on simulator-plugin for scenario protobufs. Both
+# packages must match the Apollo runtime; installing only the connector leaves
+# lib_sim_*_mdsp_bin.so unresolved at Cyber startup.
+buildtool reinstall "simulator-plugin=${PLUGIN_VERSION}"
+buildtool reinstall "studio-connector=${PLUGIN_VERSION}"
+buildtool reinstall "sim-obstacle=${PLUGIN_VERSION}"
+
+# If Apollo Studio has already installed user-space plugin metadata, point its
+# DAG at the compatible package component while preserving login credentials.
+bash "${TOP_DIR}/scripts/configure_dv_studio_connector.sh"
 
 if [[ "${CAN_USE_ROOT}" == "true" ]]; then
   run_as_root cp -f "${APOLLO_LD_CONF}" /etc/ld.so.conf.d/apollo_pkg.conf
@@ -123,4 +140,4 @@ if [[ "${CAN_USE_ROOT}" == "true" ]]; then
 fi
 
 ok "Successfully install dreamview plugins."
-ok "Please restart dreamview. Enjoy!"
+ok "Please restart Dreamview+ so the plugin process can be started. Enjoy!"
