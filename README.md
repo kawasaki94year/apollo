@@ -275,6 +275,8 @@ cd /apollo_workspace  # 如果该目录不存在，则使用 cd /apollo
 
 安装成功后会显示 `Successfully install dreamview plugins.`。如果出现 `buildtool: command not found`，确认命令是在 Apollo 开发容器内执行，并检查容器网络是否可以访问 Apollo 包仓库。
 
+容器内普通用户如果没有 sudo 密码，脚本会优先使用已有的 `buildtool` 和可写的 Apollo 包目录，并跳过全局 `ldconfig`；如果容器中连 `buildtool` 也没有，则需要以 root 身份进入容器后重新执行安装。
+
 ### 编译 Apollo
 
 在容器内的 Apollo 源码目录执行：

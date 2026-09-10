@@ -25,17 +25,19 @@ set -o pipefail
 # 插件安装会修改系统动态库配置；统一记录需要的系统级配置文件。
 APOLLO_LD_CONF="/etc/ld.so.conf.d/apollo.conf"
 
-# 容器内通常以 root 运行，宿主机或普通用户则通过 sudo 执行系统操作。
+# 容器内普通用户可能没有 sudo 密码，但 /opt/apollo/neo 通常已预先配置为可写。
+# 只使用免密 sudo，避免安装脚本在容器内阻塞等待一个不可用的密码。
+CAN_USE_ROOT=false
 if [[ "$(id -u)" -eq 0 ]]; then
+  CAN_USE_ROOT=true
   SUDO=()
-elif command -v sudo >/dev/null 2>&1; then
+elif command -v sudo >/dev/null 2>&1 && sudo -n true >/dev/null 2>&1; then
+  CAN_USE_ROOT=true
   SUDO=(sudo)
-  if ! "${SUDO[@]}" -v; then
-    error "Unable to obtain root privileges. Run this command in an Apollo host/container with working sudo."
-    exit 1
-  fi
+elif [[ "${APOLLO_IN_DOCKER}" == "true" ]]; then
+  warning "Passwordless sudo is unavailable; continue with the current container user."
 else
-  error "sudo is required when this script is not run as root."
+  error "Root privileges or passwordless sudo are required outside the Apollo container."
   exit 1
 fi
 
@@ -60,6 +62,10 @@ install_buildtool() {
   done
 
   # 安装脚本原先将 buildtool 安装逻辑注释掉，导致插件命令直接找不到。
+  if [[ "${CAN_USE_ROOT}" != "true" ]]; then
+    error "buildtool is not installed and root privileges are unavailable. Enter the container as root to install it."
+    exit 1
+  fi
   info "buildtool was not found; installing apollo-neo-buildtool."
   run_as_root apt-get install -y ca-certificates curl gnupg
   run_as_root install -m 0755 -d /etc/apt/keyrings
@@ -88,26 +94,33 @@ install_buildtool() {
 
 install_buildtool
 
-if [[ ! -f "${APOLLO_LD_CONF}" ]]; then
-  error "Missing ${APOLLO_LD_CONF}. Initialize the Apollo environment before installing Dreamview plugins."
-  exit 1
+if [[ "${CAN_USE_ROOT}" == "true" ]]; then
+  if [[ ! -f "${APOLLO_LD_CONF}" ]]; then
+    error "Missing ${APOLLO_LD_CONF}. Initialize the Apollo environment before installing Dreamview plugins."
+    exit 1
+  fi
+  run_as_root cp -f "${APOLLO_LD_CONF}" /etc/ld.so.conf.d/apollo_source.conf
+else
+  warning "Skipping system-wide library configuration; run ldconfig as root if the container does not provide Apollo library paths."
 fi
-
-run_as_root cp -f "${APOLLO_LD_CONF}" /etc/ld.so.conf.d/apollo_source.conf
 
 # 逐个重新安装 Dreamview 依赖插件；任何一个包失败都立即终止，避免误报成功。
 buildtool reinstall 3rd-tf2 3rd-civetweb 3rd-ad-rss-lib
 buildtool reinstall studio-connector
 buildtool reinstall sim-obstacle
 
-run_as_root cp -f "${APOLLO_LD_CONF}" /etc/ld.so.conf.d/apollo_pkg.conf
+if [[ "${CAN_USE_ROOT}" == "true" ]]; then
+  run_as_root cp -f "${APOLLO_LD_CONF}" /etc/ld.so.conf.d/apollo_pkg.conf
+fi
 
 # remove buildtool
 # sudo apt remove -y apollo-neo-buildtool
 
 # mv /opt/apollo/neo/setup.sh.bak /opt/apollo/neo/setup.sh
 
-run_as_root ldconfig
+if [[ "${CAN_USE_ROOT}" == "true" ]]; then
+  run_as_root ldconfig
+fi
 
 ok "Successfully install dreamview plugins."
 ok "Please restart dreamview. Enjoy!"
